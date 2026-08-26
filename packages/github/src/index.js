@@ -3,6 +3,8 @@
  *
  * Public surface:
  *  - collectHistory / assembleAudit : historical bootstrap audit
+ *  - resolveAgenticPolicyFromEnv    : operator classification policy from env
+ *                                     (BEETLEJUICE_BOT_ACTORS / _BRANCH_PREFIXES)
  *  - buildNormalizedBundle          : normalized v2 agentic_task bundle (seam A)
  *  - createGithubRestClient         : strictly-GET REST access (injectable)
  *  - createGithubAppAuth            : GitHub App -> installation token (P1)
@@ -43,6 +45,10 @@ export {
   LINK_EXPLICIT,
   LINK_INFERRED,
   SUGGESTED_AGENTIC_ACTORS,
+  DEFAULT_AGENTIC_BRANCH_PREFIXES,
+  AGENTIC_ACTORS_ENV,
+  AGENTIC_BRANCH_PREFIXES_ENV,
+  resolveAgenticPolicyFromEnv,
 } from './policy.js';
 
 export {
