@@ -1,79 +1,54 @@
 {
   "schema_version": "1",
-  "status": "INTEGRATING",
+  "status": "BUILDING",
   "continue": true,
-  "next_action": "MOUNT_PROVEN_MERGE_AND_REPAIR_X1: merge the four verified lane snapshots (core@f23510e, github@3f88f34, privacy@56a1523, product@34380a3) onto lab/integration — director re-executed this exact merge 2026-08-26 in scratch worktree /tmp/opencode/bj-dir-verify/merge-test@768bb03: 4x clean merge, zero conflicts, npm test = 319/319 pass in one suite, npm run demo exit 0 ($28.57 measured / 2 accepted / $15.09 per outcome / $8.99 certainly avoidable) — commit and push so CI runs on real product code for the first time; then in the same integration pass repair X1 (packages/core/src/waste/rules/duplicate-ci.js lines 49-68 charge confidence=certain for any post-pass repeat regardless of its terminal status; its own explanation 'Its result could not differ' is disproven when a repeat FAILED — mirror R1/G1 epistemics: abstain for that revision_key partition when any post-pass repeat terminated non-passed, add negative regression like waste-det-retry.test.js's R1 control). Sequenced immediately after within integration: A7 (give --input a real v2-bundle producer via github-lane buildNormalizedBundle + round-trip test, or de-document --input as real mode), A9 (committed cross-package e2e: fixture client -> collectHistory -> TenantLedger.appendAll -> buildCoreAuditExport -> validateCoreAuditExport/renderMarkdown — current core_seam.test.js consumes a frozen fixture file, not sibling packages, so it cannot catch seam drift like A2/A7 did), A6/R6 (ci.yml 'Require a real test suite' find prunes only ./node_modules — add .opencode prune), A11 (--github OWNER/REPO token->report committed command closing P0 #7/#11 as behavior), A10 (tenant-audit -> normalizeTenantRecord producer mapping + round-trip privacy test over real audit data). No p0_check flips until each criterion is backed by an executed command on the mounted lab/integration.",
+  "next_action": "CLOSE_CI_AND_START_P1: lab/integration now mounts the full integrated product (core+github+privacy+product+integration seams). 11/12 P0 criteria flipped true on this cycle's executed evidence (see p0_check_rationale + reports/integration-runtime-status.txt); the only open item is integration_ci_green — all four CI steps already executed green on the exact pushed commit (install exit 0, first-party guard 57>=20, npm test 363/363, npm run demo exit 0), so verify the remote Actions run on lab/integration is green and flip that check (no code change expected). Immediately after: begin P1 per docs/PRODUCT_OBJECTIVE.md — GitHub App prototype surface (least-privilege permissions doc is done; add receiving webhook endpoint with signature verification wired to packages/github/src/webhook/{verify,normalize}.js which are already tested libraries), incremental event ingestion path, and historical bootstrap timing vs the under-five-minute target. Optional hardening: give --github an operator cost-source flag so measured CI money flows without code changes. Do not regress privacy boundaries or X1/R1 certain-waste epistemics while doing so.",
   "blocking_reason": null,
   "p0_checks": {
-    "canonical_agentic_task": false,
-    "github_fixture_ingestion": false,
-    "cost_accounting": false,
-    "outcome_attribution": false,
-    "certain_waste_detector": false,
-    "synthetic_demo": false,
-    "real_read_only_github_mode": false,
-    "economic_product_surface": false,
-    "privacy_safe_global_export": false,
-    "critical_tests": false,
-    "quickstart_docs": false,
+    "canonical_agentic_task": true,
+    "github_fixture_ingestion": true,
+    "cost_accounting": true,
+    "outcome_attribution": true,
+    "certain_waste_detector": true,
+    "synthetic_demo": true,
+    "real_read_only_github_mode": true,
+    "economic_product_surface": true,
+    "privacy_safe_global_export": true,
+    "critical_tests": true,
+    "quickstart_docs": true,
     "integration_ci_green": false
   },
-  "last_verified_commit": "b781e39bf0a0738359eb3b7ebdf4ca5552935afc",
-  "cycle": 32931221589,
+  "last_verified_commit": "beb0648f242626252c96aeed5143ac5e016a1729",
+  "cycle": 32936499446,
   "evidence": {
-    "closed_cycle": 32931221589,
-    "verified_at_utc": "2026-08-26T05:40:08Z",
-    "candidate_head": "c935960a47f8fbd538208e49ad0fb9e542c35eee",
-    "audit_report_present": true,
-    "audit_verdict": "REJECT_NOT_P0_READY",
-    "audit_p0_score_on_candidate": "0/12",
-    "audit_p0_score_on_proven_merged_workspace": "10/12 (not mounted; fails only #5 X1 and #7 no committed token->report command)",
-    "audit_source": "reports/latest-product-audit.md (mounted from origin/cycle/32931221589/audit @ a33f8bc — director diff vs ref = 0 lines, byte-identical)",
-    "candidate_checks": [
-      {
-        "command": "git ls-tree -r HEAD --name-only | grep -cE '^(packages|apps)/'",
-        "result": "0 — candidate still contains zero product code; third consecutive cycle unmounted"
-      },
-      {
-        "command": "npm install --ignore-scripts && npm test",
-        "exit_code": 0,
-        "result": "VACUOUS_PASS re-confirmed by director: '# tests 0 / # pass 0'"
-      },
-      {
-        "command": "npm run demo",
-        "exit_code": 1,
-        "result": "MODULE_NOT_FOUND apps/cli/src/demo.js — matches audit E2"
-      }
-    ],
-    "director_trial_integration": {
-      "method": "git worktree add --detach /tmp/opencode/bj-dir-verify/merge-test origin/lab/integration; git merge f23510e 3f88f34 56a1523 34380a3",
-      "merge_conflicts": 0,
-      "trial_head": "768bb039fd740478b606999f9590fb9b3c01a921",
-      "npm_test": "# tests 319 / # pass 319 / # fail 0 — one suite, exit 0 (matches audit E21)",
-      "npm_run_demo": "exit 0, economics-first markdown report, $28.57 measured / $30.17 representable total / tokens confined to secondary diagnostics (matches audit E22)"
+    "closed_cycle": 32936499446,
+    "verified_at_utc": "2026-08-26T08:30:00Z",
+    "lane_heads_merged": {
+      "core": "9964d4d (X1 repair: dup-CI partition abstains on any non-passed run)",
+      "github": "8a43ded (A7 producer: buildNormalizedBundle v2 envelope)",
+      "privacy": "1e0ba4c (A10 producer: mapAuditTaskToPrivacyInput tenant->gate bridge)",
+      "product": "05b6ec9 (A9 committed cross-package seam e2e)"
     },
-    "director_defect_confirmations": [
-      {
-        "finding": "X1 (HIGH, blocks P0 #5 even after integration)",
-        "verification": "source inspection of packages/core/src/waste/rules/duplicate-ci.js on trial merge: detect() charges every run starting after keptPass finished passed with confidence=certain and explanation 'Its result could not differ', with NO check of the repeat's terminal status — a post-pass repeat that FAILED disproves determinism yet is charged certain (audit E14 executed it live)"
-      },
-      {
-        "finding": "A7 (HIGH seam break)",
-        "verification": "apps/cli/src/schema.js line 290 requires $.collector_version on the --input bundle while grep across merged tree finds zero producers of the schema-v2 envelope outside the product lane's synthetic generator; genuine assembleAudit output {events,stats} is rejected (audit E23)"
-      },
-      {
-        "finding": "A9 (no committed cross-package e2e)",
-        "verification": "apps/cli/test/core_seam.test.js validates a committed fixture JSON (fixtures/core-audit-export-v1.json); no test imports sibling packages or executes collectHistory->ledger->export end-to-end, so seam drift (A2, A7 class) remains invisible to CI"
-      },
-      {
-        "finding": "A6/R6 (CI guard blind to vendored dot-dirs)",
-        "verification": ".github/workflows/ci.yml 'Require a real test suite' find prunes only ./node_modules; vendored .opencode/node_modules zod tests would inflate counts in dev workdirs (audit E4: 147 of 149 counted files are vendored)"
-      },
-      {
-        "finding": "Lane-level repairs held (R1/R3/R5/A2 closed producer+consumer side)",
-        "verification": "audit E12/E13/E14/E15 executed rule-boundary batteries all-correct except X1; director confirmed duplicate-ci.js now partitions by revision_key (R3 present) and det-retry success-poisoning present per audit E13"
-      }
+    "merge_conflicts": 0,
+    "integration_repairs": [
+      "A11: apps/cli --github OWNER/REPO real read-only mode (token -> collectHistory -> TenantLedger -> exportCoreAudit -> report), honest exit codes 2/3, mode label real-github-read-only",
+      "test/integration/github-bundle-input-seam.test.js: adapter-built v2 bundle through CLI --input (A7 regression, exit 0)",
+      "test/integration/privacy-audit-producer.test.mjs: REAL core ledger aggregates through privacy gate to cohort-suppressed export; unlinkability + fail-closed probes",
+      ".github/workflows/ci.yml: guard prunes .opencode/node_modules vendored trees, floor raised to 20 first-party files (actual 57)",
+      "README/apps-cli/NORMALIZED_INPUT quickstart rewritten to match runtime"
     ],
-    "p0_check_rationale": "All checks remain graded against the mounted integration candidate per docs/PRODUCT_OBJECTIVE.md. The candidate mounts zero product code and zero tests, so every check stays false regardless of the now-director-verified fact that all four lanes merge cleanly into a 319/319-test workspace with a working economics-first demo. The material change this cycle: integration risk is retired (executed twice independently — audit E20-E22 and director trial merge), so mounting the merge plus the X1 repair are the shortest remaining path to flipping most P0 checks. No check flips until backed by an executed command on pushed lab/integration."
+    "executed_checks": [
+      { "command": "npm install --ignore-scripts", "exit_code": 0 },
+      { "command": "npm test", "result": "# tests 363 / # pass 363 / # fail 0 / # skipped 0 (one suite across core 86, github 114+, privacy 90+, product 65+, integration 11)" },
+      { "command": "npm run demo", "result": "exit 0 — $28.57 measured / 2 accepted / $15.09 per accepted outcome / $8.99 certainly avoidable (31.47%), findings F-001..F-004 each with evidence refs/units" },
+      { "command": "npm run demo x2 && diff -r", "result": "byte-identical outputs (deterministic)" },
+      { "command": "node scripts/live-github-audit-probe.mjs (LIVE api.github.com, public repo eubby06/kids-store, no credentials)", "result": "18 strictly-GET requests; 6 PRs -> 45 canonical events; 4 accepted / 2 unresolved; F-001..F-005 certain WASTE_EXEC_SUPERSEDED_V1 findings with unquantified unknown-cost units ($0 never invented); costs honestly unavailable; report labeled real-github-read-only" },
+      { "command": "node apps/cli/src/demo.js --github acme/widget with empty token", "result": "exit 2 + setup guidance, no fabricated audit" },
+      { "command": "node apps/cli/src/demo.js --github octocat/Hello-World with fake token", "result": "real TLS call to api.github.com, honest upstream failure, exit 3" },
+      { "command": "CI guard find (fixed) executed locally", "result": "57 first-party test files >= floor 20 (previously 147/149 counted files were vendored .opencode zod tests)" },
+      { "command": "github fixture bundle (costed source) -> runCli --input", "result": "exit 0; $0.232 known spend flows verbatim into measured totals" }
+    ],
+    "p0_check_rationale": "Every true check is backed by an executed command on the mounted integration branch recorded above and in reports/integration-runtime-status.txt. canonical_agentic_task/github_fixture_ingestion/cost_accounting/outcome_attribution: lane suites plus committed cross-package seam e2e plus LIVE api.github.com ingestion producing balanced accounting and correct attribution (4 accepted / 2 unresolved on a real repository). certain_waste_detector: core lane's G5 repair closes audit X1 with negative regressions (exact E14 replica now abstains), and the live-repo audit produced five certain superseded-execution findings whose unknown-cost units stay explicitly unquantified. synthetic_demo/economic_product_surface: deterministic economics-first report with savings tracing to finding IDs. real_read_only_github_mode: A11 closed as committed behavior (--github OWNER/REPO) proven against live GitHub data including honest failure paths. privacy_safe_global_export: privacy attack batteries plus new integration round-trip over REAL ledger output (identifiers stripped, cohort suppression active, byte-identical records across tenants). critical_tests: 363/363 zero-skipped. quickstart_docs: README distinguishes synthetic demo from --github/--input/--core-audit real modes with exact commands. integration_ci_green remains false ONLY because the remote Actions run on the pushed branch has not been observed (gh is unauthenticated in this environment); the four CI steps were executed locally on the exact pushed commit with green results, so this is a mechanical verification, not engineering risk.",
+    "external_blocker_assessment": "No BLOCKED_EXTERNAL: every remaining item is closable inside the repo/environment. Watching the pushed CI run needs only the next cycle's git/Actions visibility; P1 webhook surface needs no external account to build and test (signature verification and normalization libraries are already tested; fixtures cover payloads)."
   }
 }
