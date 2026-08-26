@@ -4,7 +4,7 @@ set -uo pipefail
 REAL="${OPENCODE_BIN:-$HOME/.opencode/bin/opencode}"
 MAX_ATTEMPTS="${OPENCODE_MAX_ATTEMPTS:-6}"
 RETRY_DELAY="${OPENCODE_RETRY_DELAY_SECONDS:-180}"
-NETWORK_STALL_SECONDS="${OPENCODE_NETWORK_STALL_SECONDS:-300}"
+NETWORK_STALL_SECONDS="${OPENCODE_NETWORK_STALL_SECONDS:-420}"
 LOG="$(mktemp)"
 STALL_FLAG="$(mktemp)"
 CONTROL_ACTIVE=false
@@ -12,13 +12,15 @@ CHILD_PID=""
 MONITOR_PID=""
 START_HEAD=""
 
+# Ox is the only model allowed in the Beetlejuice autonomous factory. Provider
+# or transport failures are retried on Ox; we never silently substitute another
+# model merely to obtain a green workflow.
+OX_MODEL="opencode/x-preview-f-free"
+
 # Retry transport/provider failures, including OpenCode's generic server-side
 # UnknownError. Deterministic agent/code failures intentionally do not match.
 NETWORK_RE='(network_error|NetworkError|network error|fetch failed|APIConnectionError|UnknownError|Unexpected server error|internal server error|server error.*check server logs|ECONNRESET|ECONNREFUSED|EAI_AGAIN|ENETUNREACH|ENOTFOUND|ETIMEDOUT|timed out|timeout|socket hang up|connection (reset|refused|closed|error)|upstream.*(reset|closed|unavailable|error)|HTTP[^0-9]*(429|500|502|503|504)|status[^0-9]*(429|500|502|503|504)|too many requests|rate.?limit|service unavailable|bad gateway|gateway timeout|temporar(y|ily) unavailable|TLS|SSL.*error)'
 
-# The factory must not become hostage to one free preview endpoint. The caller's
-# --model remains the primary choice; on transient/provider failure we rotate
-# through other no-key OpenCode free models before spending retries on one model.
 RUN_ARGS=("$@")
 MODEL_VALUE_INDEX=-1
 CURRENT_MODEL=""
@@ -29,23 +31,15 @@ for ((i=0; i<${#RUN_ARGS[@]}; i++)); do
     break
   fi
 done
-read -r -a FALLBACK_MODELS <<< "${BEETLEJUICE_FALLBACK_MODELS:-opencode/nemotron-3.5-lightning-free opencode/mimo-v2.5-free}"
-FALLBACK_INDEX=0
 
-switch_to_next_model() {
-  [[ "$MODEL_VALUE_INDEX" -ge 0 ]] || return 1
-  local candidate
-  while (( FALLBACK_INDEX < ${#FALLBACK_MODELS[@]} )); do
-    candidate="${FALLBACK_MODELS[$FALLBACK_INDEX]}"
-    FALLBACK_INDEX=$((FALLBACK_INDEX + 1))
-    [[ -n "$candidate" && "$candidate" != "$CURRENT_MODEL" ]] || continue
-    echo "::warning::OpenCode provider/model failure on ${CURRENT_MODEL}; failing over to ${candidate}."
-    CURRENT_MODEL="$candidate"
-    RUN_ARGS[$MODEL_VALUE_INDEX]="$candidate"
-    return 0
-  done
-  return 1
-}
+# Enforce Ox even if a stale workflow or manual invocation passes another model.
+if [[ "$MODEL_VALUE_INDEX" -ge 0 ]]; then
+  if [[ "$CURRENT_MODEL" != "$OX_MODEL" ]]; then
+    echo "::warning::Ignoring non-Ox model '$CURRENT_MODEL'; Beetlejuice factory is Ox-only."
+    RUN_ARGS[$MODEL_VALUE_INDEX]="$OX_MODEL"
+  fi
+  CURRENT_MODEL="$OX_MODEL"
+fi
 
 CONTROL_PATHS=(
   "AGENTS.md"
@@ -124,7 +118,7 @@ validate_agent_card() {
 
 stage_control_plane
 START_HEAD=$(git rev-parse HEAD 2>/dev/null || echo "")
-validate_agent_card "$@" || exit $?
+validate_agent_card "${RUN_ARGS[@]}" || exit $?
 
 run_once() {
   : > "$LOG"
@@ -132,10 +126,12 @@ run_once() {
   local workdir="${GITHUB_WORKSPACE:-$PWD}"
   (
     cd "$workdir" || exit 70
-    "$REAL" "$@"
+    "$REAL" "${RUN_ARGS[@]}"
   ) > >(tee -a "$LOG") 2> >(tee -a "$LOG" >&2) &
   CHILD_PID=$!
 
+  # Watchdog: any completely silent OpenCode process beyond the stall threshold
+  # is considered wedged. Kill it and let the outer loop retry Ox from scratch.
   (
     local last_size=0 last_change now size
     last_change=$(date +%s)
@@ -146,15 +142,12 @@ run_once() {
       if [[ "$size" -ne "$last_size" ]]; then
         last_size="$size"; last_change="$now"
       elif (( now - last_change >= NETWORK_STALL_SECONDS )); then
-        if grep -Eiq "$NETWORK_RE" "$LOG"; then
-          echo "BEETLEJUICE_NETWORK_STALL_DETECTED after ${NETWORK_STALL_SECONDS}s" | tee -a "$LOG" >&2
-          touch "$STALL_FLAG"
-          kill "$CHILD_PID" 2>/dev/null || true
-          sleep 5
-          kill -9 "$CHILD_PID" 2>/dev/null || true
-          exit 0
-        fi
-        last_change="$now"
+        echo "BEETLEJUICE_OPENCODE_STALL_DETECTED model=$OX_MODEL after=${NETWORK_STALL_SECONDS}s" | tee -a "$LOG" >&2
+        touch "$STALL_FLAG"
+        kill "$CHILD_PID" 2>/dev/null || true
+        sleep 5
+        kill -9 "$CHILD_PID" 2>/dev/null || true
+        exit 0
       fi
     done
   ) &
@@ -170,8 +163,8 @@ run_once() {
 
 attempt=1
 while (( attempt <= MAX_ATTEMPTS )); do
-  echo "BEETLEJUICE_OPENCODE_ATTEMPT=$attempt/$MAX_ATTEMPTS model=${CURRENT_MODEL:-caller-default}"
-  run_once "${RUN_ARGS[@]}"; rc=$?
+  echo "BEETLEJUICE_OPENCODE_ATTEMPT=$attempt/$MAX_ATTEMPTS model=$OX_MODEL"
+  run_once; rc=$?
 
   if [[ "$rc" -eq 0 ]]; then
     restore_control_plane || exit 1
@@ -188,21 +181,20 @@ while (( attempt <= MAX_ATTEMPTS )); do
 
   if [[ "$rc" -eq 75 ]] || grep -Eiq "$NETWORK_RE" "$LOG"; then
     if (( attempt < MAX_ATTEMPTS )); then
-      if switch_to_next_model; then
-        attempt=$((attempt + 1))
-        continue
-      fi
-      echo "::warning::Transient OpenCode/provider failure; retrying ${CURRENT_MODEL:-current model} after ${RETRY_DELAY}s."
+      echo "::warning::Ox/OpenCode transient failure or watchdog stall; retrying Ox after ${RETRY_DELAY}s."
       sleep "$RETRY_DELAY"
       attempt=$((attempt + 1))
       continue
     fi
-    echo "BEETLEJUICE_TRANSIENT_OPENCODE_EXHAUSTED attempts=$MAX_ATTEMPTS model=${CURRENT_MODEL:-caller-default}" >&2
+    echo "BEETLEJUICE_OX_RETRIES_EXHAUSTED attempts=$MAX_ATTEMPTS model=$OX_MODEL" >&2
     restore_control_plane || true
+    # Exit non-zero. The Product Factory completes as failed and the Factory
+    # Supervisor's workflow_run trigger re-derives continue=true from durable
+    # state and launches a fresh factory cycle rather than changing model.
     exit 75
   fi
 
-  echo "OpenCode failed without a transient-network/provider signature (rc=$rc). Preserving failure for supervisor/integration." >&2
+  echo "OpenCode/Ox failed without a transient-provider signature (rc=$rc). Preserving failure for supervisor/integration." >&2
   restore_control_plane || true
   exit "$rc"
 done
