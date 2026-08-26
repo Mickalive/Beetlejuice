@@ -1,0 +1,265 @@
+name: BEETLEJUICE Product Factory
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "11 */6 * * *"
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: beetlejuice-product-factory
+  cancel-in-progress: false
+
+env:
+  BEETLEJUICE_MODEL: opencode/x-preview-f-free
+
+jobs:
+  lanes:
+    name: "BUILD — ${{ matrix.lane }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 210
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - lane: core
+            agent: core_builder
+            owned_path: packages/core
+            mission: "Implement the highest-impact unfinished P0 canonical economics/outcome/certain-waste slice."
+          - lane: github
+            agent: github_builder
+            owned_path: packages/github
+            mission: "Implement the highest-impact unfinished P0/P1 GitHub read-only ingestion/App-adapter slice."
+          - lane: privacy
+            agent: privacy_builder
+            owned_path: packages/privacy
+            mission: "Implement the highest-impact unfinished P0 privacy-gate/global-export slice."
+          - lane: product
+            agent: product_builder
+            owned_path: apps
+            mission: "Implement the highest-impact unfinished P0 user-facing audit/demo slice."
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Start cycle lane from latest integrated candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          if git ls-remote --exit-code --heads origin refs/heads/lab/integration >/dev/null 2>&1; then
+            git fetch origin lab/integration:refs/remotes/origin/lab/integration
+            BASE=origin/lab/integration
+          else
+            BASE=origin/main
+          fi
+          BRANCH="cycle/${GITHUB_RUN_ID}/${{ matrix.lane }}"
+          git switch -C "$BRANCH" "$BASE"
+          echo "BEETLEJUICE_CYCLE_BRANCH=$BRANCH" >> "$GITHUB_ENV"
+
+      - name: Install OpenCode
+        shell: bash
+        run: curl --retry 3 --retry-all-errors --retry-delay 15 -fsSL https://opencode.ai/install | bash
+
+      - name: Run lane agent with resilient retry
+        shell: bash
+        run: |
+          bash .github/scripts/run-opencode-with-retry.sh run \
+            --model "$BEETLEJUICE_MODEL" \
+            --agent "${{ matrix.agent }}" \
+            "${{ matrix.mission }} Work on this cycle branch from the latest integration candidate. Read the binding Beetlejuice control plane first. Produce durable tested product progress inside your owned lane. Inspect state/factory.json only as context; do not declare global product completion. If the obvious task is already implemented, find the next missing acceptance criterion in your workcard and advance it."
+
+      - name: Run lane-scoped tests when present
+        if: always()
+        shell: bash
+        run: |
+          set -o pipefail
+          if [[ -d "${{ matrix.owned_path }}" ]]; then
+            node --test "${{ matrix.owned_path }}" 2>&1 | tee "/tmp/${{ matrix.lane }}-tests.log" || true
+          fi
+
+      - name: Persist lane snapshot
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "beetlejuice-${{ matrix.lane }}-builder"
+          git config user.email "beetlejuice-${{ matrix.lane }}@autonomous.local"
+          git add -A
+          git commit -m "Factory ${GITHUB_RUN_ID}: ${{ matrix.lane }} lane" || true
+          git push --force origin "HEAD:refs/heads/${BEETLEJUICE_CYCLE_BRANCH}"
+
+  integration:
+    name: INTEGRATION DIRECTOR
+    needs: [lanes]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 270
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Checkout persistent integration candidate and mount lane snapshots
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          if git ls-remote --exit-code --heads origin refs/heads/lab/integration >/dev/null 2>&1; then
+            git fetch origin lab/integration:refs/remotes/origin/lab/integration
+            git switch -C lab/integration origin/lab/integration
+          else
+            git switch -C lab/integration origin/main
+          fi
+
+          for lane in core github privacy product; do
+            REMOTE="cycle/${GITHUB_RUN_ID}/${lane}"
+            DEST="/tmp/beetlejuice_${lane}"
+            rm -rf "$DEST"
+            if git ls-remote --exit-code --heads origin "refs/heads/$REMOTE" >/dev/null 2>&1; then
+              git fetch origin "$REMOTE:refs/remotes/origin/$REMOTE"
+              git worktree add --detach "$DEST" "origin/$REMOTE"
+            else
+              mkdir -p "$DEST"
+              echo "Lane $lane produced no snapshot in run $GITHUB_RUN_ID" > "$DEST/LANE_MISSING.txt"
+            fi
+          done
+
+      - name: Install OpenCode
+        shell: bash
+        run: curl --retry 3 --retry-all-errors --retry-delay 15 -fsSL https://opencode.ai/install | bash
+
+      - name: Integrate and repair
+        shell: bash
+        run: |
+          bash .github/scripts/run-opencode-with-retry.sh run \
+            --model "$BEETLEJUICE_MODEL" \
+            --agent integration_director \
+            "Integrate Factory cycle ${GITHUB_RUN_ID}. Lane snapshots are mounted at /tmp/beetlejuice_core, /tmp/beetlejuice_github, /tmp/beetlejuice_privacy and /tmp/beetlejuice_product. Compare them to the current persistent integration candidate. Bring in all useful non-conflicting product progress, repair interfaces/root config/tests as needed, run the complete test path and synthetic demo when available, and update state/factory.json from verified evidence. Do not merely summarize lane work: leave one runnable integrated product candidate."
+
+      - name: Verify integrated candidate
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          npm test
+          TEST_RC=$?
+          npm run demo
+          DEMO_RC=$?
+          echo "integration_test_rc=$TEST_RC" > reports/integration-runtime-status.txt
+          echo "demo_rc=$DEMO_RC" >> reports/integration-runtime-status.txt
+          exit 0
+
+      - name: Persist integration branch
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p reports state
+          git config user.name "beetlejuice-integration-director"
+          git config user.email "beetlejuice-integration@autonomous.local"
+          git add -A
+          git commit -m "Factory ${GITHUB_RUN_ID}: integrate product candidate" || true
+          git push origin HEAD:refs/heads/lab/integration
+
+  audit:
+    name: ADVERSARIAL PRODUCT AUDIT
+    needs: [integration]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Mount integration candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin lab/integration:refs/remotes/origin/lab/integration
+          git switch -C "cycle/${GITHUB_RUN_ID}/audit" origin/lab/integration
+
+      - name: Install OpenCode
+        shell: bash
+        run: curl --retry 3 --retry-all-errors --retry-delay 15 -fsSL https://opencode.ai/install | bash
+
+      - name: Audit P0 and claims
+        shell: bash
+        run: |
+          bash .github/scripts/run-opencode-with-retry.sh run \
+            --model "$BEETLEJUICE_MODEL" \
+            --agent product_auditor \
+            "Adversarially audit the integrated Beetlejuice candidate from Factory cycle ${GITHUB_RUN_ID}. Run the product and tests. Falsify P0, privacy, economic attribution and certain-waste claims wherever possible. Write reports/latest-product-audit.md with exact PASS/FAIL evidence and smallest repairs."
+
+      - name: Persist audit snapshot
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "beetlejuice-product-auditor"
+          git config user.email "beetlejuice-auditor@autonomous.local"
+          git add reports || true
+          git commit -m "Factory ${GITHUB_RUN_ID}: adversarial product audit" || true
+          git push --force origin "HEAD:refs/heads/cycle/${GITHUB_RUN_ID}/audit"
+
+  direction:
+    name: PRODUCT DIRECTOR — CONTINUE OR GATE
+    needs: [integration, audit]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Checkout integration and mount audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin lab/integration:refs/remotes/origin/lab/integration
+          git switch -C lab/integration origin/lab/integration
+          AUDIT="cycle/${GITHUB_RUN_ID}/audit"
+          if git ls-remote --exit-code --heads origin "refs/heads/$AUDIT" >/dev/null 2>&1; then
+            git fetch origin "$AUDIT:refs/remotes/origin/$AUDIT"
+            git show "origin/$AUDIT:reports/latest-product-audit.md" > reports/latest-product-audit.md 2>/dev/null || true
+          fi
+
+      - name: Install OpenCode
+        shell: bash
+        run: curl --retry 3 --retry-all-errors --retry-delay 15 -fsSL https://opencode.ai/install | bash
+
+      - name: Set evidence-gated factory direction
+        shell: bash
+        run: |
+          bash .github/scripts/run-opencode-with-retry.sh run \
+            --model "$BEETLEJUICE_MODEL" \
+            --agent product_director \
+            "Close Factory cycle ${GITHUB_RUN_ID}. Re-run targeted verification where useful, read the latest audit if present, then update state/factory.json truthfully. If any P0 gap remains that can be fixed in-repo, continue=true and next_action must name the concrete highest-value gap. Never stop because this cycle had a failed lane/test/network call."
+
+      - name: Validate and persist factory state
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f state/factory.json || { echo "::error::Missing state/factory.json"; exit 1; }
+          STATUS=$(jq -r '.status // empty' state/factory.json)
+          CONTINUE=$(jq -r '.continue // empty' state/factory.json)
+          case "$STATUS" in BUILDING|INTEGRATING|BLOCKED_EXTERNAL|P0_READY|COMPLETE) ;; *) echo "::error::Invalid factory status: $STATUS"; exit 1;; esac
+          case "$CONTINUE" in true|false) ;; *) echo "::error::Invalid continue flag"; exit 1;; esac
+          TMP=$(mktemp)
+          jq --arg commit "$(git rev-parse HEAD)" --argjson cycle "${GITHUB_RUN_ID}" '.last_verified_commit=$commit | .cycle=$cycle' state/factory.json > "$TMP"
+          mv "$TMP" state/factory.json
+          git config user.name "beetlejuice-product-director"
+          git config user.email "beetlejuice-director@autonomous.local"
+          git add -A
+          git commit -m "Factory ${GITHUB_RUN_ID}: product direction" || true
+          git push origin HEAD:refs/heads/lab/integration
