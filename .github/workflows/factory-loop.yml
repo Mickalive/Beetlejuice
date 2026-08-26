@@ -83,42 +83,43 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          echo "BEETLEJUICE_SNAPSHOT_SAFE=false" >> "$GITHUB_ENV"
           OWNED="${{ matrix.owned_path }}"
-          [[ -d "$OWNED" ]] || exit 0
+          [[ -d "$OWNED" ]] || { echo "::error::Owned path missing: $OWNED"; exit 1; }
           MATCHES=$(grep -RIlE 'xox[baprs]-[A-Za-z0-9-]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}' "$OWNED" --exclude-dir=node_modules --exclude-dir=.git 2>/dev/null || true)
+          REPAIR_RC=0
           if [[ -n "$MATCHES" ]]; then
             printf 'Credential-shaped literals detected in:\n%s\n' "$MATCHES"
             bash .github/scripts/run-opencode-with-retry.sh run \
               --model "$BEETLEJUICE_MODEL" \
               --agent "${{ matrix.agent }}" \
-              "Before this lane can be persisted, remove every credential-shaped literal from these owned-lane files: ${MATCHES//$'\n'/, }. Preserve the test intent by constructing fake values from harmless string fragments at runtime. Do not expose or print the sensitive-looking values. Work only inside $OWNED; do not fetch/merge/rebase or modify the control plane. Re-run the affected tests."
+              "Before this lane can be persisted, remove every credential-shaped literal from these owned-lane files: ${MATCHES//$'\n'/, }. Preserve the test intent by constructing fake values from harmless string fragments at runtime. Do not expose or print the sensitive-looking values. Work only inside $OWNED; do not fetch/merge/rebase or modify the control plane. Re-run the affected tests." || REPAIR_RC=$?
           fi
           REMAINING=$(grep -RIlE 'xox[baprs]-[A-Za-z0-9-]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}' "$OWNED" --exclude-dir=node_modules --exclude-dir=.git 2>/dev/null || true)
-          if [[ -n "$REMAINING" ]]; then
-            echo "::error::Credential-shaped literals remain in owned lane; refusing unsafe snapshot."
+          if [[ "$REPAIR_RC" -ne 0 || -n "$REMAINING" ]]; then
+            echo "::error::Lane is not safe to persist; credential-shaped fixture repair failed or literals remain."
             exit 1
           fi
+          echo "BEETLEJUICE_SNAPSHOT_SAFE=true" >> "$GITHUB_ENV"
 
       - name: Rebuild hermetic lane snapshot
         if: always()
         shell: bash
         run: |
           set -euo pipefail
+          echo "BEETLEJUICE_SNAPSHOT_READY=false" >> "$GITHUB_ENV"
           OWNED="${{ matrix.owned_path }}"
           SNAP="/tmp/beetlejuice-owned-${{ matrix.lane }}"
+          [[ -d "$OWNED" ]] || { echo "::error::Owned path missing: $OWNED"; exit 1; }
           rm -rf "$SNAP"
           mkdir -p "$SNAP/$(dirname "$OWNED")"
-          if [[ -e "$OWNED" ]]; then
-            cp -a "$OWNED" "$SNAP/$OWNED"
-          fi
+          cp -a "$OWNED" "$SNAP/$OWNED"
 
           git reset --hard "$BEETLEJUICE_CYCLE_BASE_SHA"
           git clean -fdx
           rm -rf "$OWNED"
-          if [[ -e "$SNAP/$OWNED" ]]; then
-            mkdir -p "$(dirname "$OWNED")"
-            cp -a "$SNAP/$OWNED" "$OWNED"
-          fi
+          mkdir -p "$(dirname "$OWNED")"
+          cp -a "$SNAP/$OWNED" "$OWNED"
 
           git config user.name "beetlejuice-${{ matrix.lane }}-builder"
           git config user.email "beetlejuice-${{ matrix.lane }}@autonomous.local"
@@ -131,14 +132,28 @@ jobs:
             echo "$BAD"
             exit 1
           fi
+          echo "BEETLEJUICE_SNAPSHOT_READY=true" >> "$GITHUB_ENV"
+
+      - name: Archive lane snapshot before tests and push
+        if: always() && env.BEETLEJUICE_SNAPSHOT_SAFE == 'true' && env.BEETLEJUICE_SNAPSHOT_READY == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: beetlejuice-lane-${{ matrix.lane }}-${{ github.run_id }}
+          path: ${{ matrix.owned_path }}
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Install workspace for hermetic tests
+        if: always() && env.BEETLEJUICE_SNAPSHOT_READY == 'true'
+        shell: bash
+        run: npm install --ignore-scripts
 
       - name: Run real lane tests
-        if: always()
+        if: always() && env.BEETLEJUICE_SNAPSHOT_READY == 'true'
         shell: bash
         run: |
           set -euo pipefail
           OWNED="${{ matrix.owned_path }}"
-          [[ -d "$OWNED" ]] || { echo "::error::Owned path missing: $OWNED"; exit 1; }
           FOUND=0
           while IFS= read -r manifest; do
             DIR=$(dirname "$manifest")
@@ -153,17 +168,8 @@ jobs:
             exit 1
           fi
 
-      - name: Archive lane snapshot before push
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: beetlejuice-lane-${{ matrix.lane }}-${{ github.run_id }}
-          path: ${{ matrix.owned_path }}
-          if-no-files-found: error
-          retention-days: 7
-
       - name: Persist lane snapshot
-        if: always()
+        if: always() && env.BEETLEJUICE_SNAPSHOT_SAFE == 'true' && env.BEETLEJUICE_SNAPSHOT_READY == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -172,7 +178,7 @@ jobs:
   integration:
     name: INTEGRATION DIRECTOR
     needs: [lanes]
-    if: always()
+    if: ${{ always() && !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 270
     steps:
@@ -263,7 +269,7 @@ jobs:
   audit:
     name: ADVERSARIAL PRODUCT AUDIT
     needs: [integration]
-    if: always()
+    if: ${{ always() && !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 150
     steps:
@@ -304,7 +310,7 @@ jobs:
   direction:
     name: PRODUCT DIRECTOR — CONTINUE OR GATE
     needs: [integration, audit]
-    if: always()
+    if: ${{ always() && !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 150
     steps:
