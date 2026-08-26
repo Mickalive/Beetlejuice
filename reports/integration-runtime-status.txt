@@ -1,2 +1,2 @@
-integration_test_rc=0
+integration_test_rc=1
 demo_rc=0
