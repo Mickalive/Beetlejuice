@@ -2,45 +2,59 @@
 
 - **Auditor:** product_auditor
 - **Date:** 2026-08-26
-- **Audited candidate:** Factory cycle `32936499446` — branch `cycle/32936499446/audit` == `origin/lab/integration` @ `bc0f974` (contains lane merges `9964d4d` core, `8a43ded` github, `1e0ba4c` privacy, `05b6ec9` product + integration repairs `3f7b5d7`, `beb0648`, `12eb539`)
-- **Verdict: REJECT as P0_READY — 10/12 P0 criteria PASS, #7 FAILS on a newly discovered HIGH defect (A12), #12 passes by local execution but the remote Actions run remains unobserved.** This is the first cycle with a real, mounted, integrated product. Every repair demanded by the previous audit (X1, A7, A9, A10, A11) landed and survived re-execution. The privacy gate repelled a harder attack battery than its own committed tests. One new defect falsifies the "real read-only GitHub mode" product claim: **the committed CLI `--github` command cannot succeed against any repository even with a valid credential**, and one recorded evidence line in `state/factory.json` ("real TLS call to api.github.com") is contradicted by instrumentation.
+- **Audited candidate:** Factory cycle `32941279561` — branch `cycle/32941279561/audit` == `origin/lab/integration`. Product head `25bb22c` (all four lane merges `db927f7` core, `d73e1ca` github, `eb9a833` privacy, `05d6899` product + integration repairs `25bb22c`) with state commit `d56e0c4` on top (`git diff 25bb22c..d56e0c4 --stat`: only `state/factory.json`, so all executions below validate the pushed product head).
+- **Verdict: 11/12 P0 criteria PASS on executed evidence. #12 (CI green on the integration candidate) FAILS — and is worse than the state file records: `BEETLEJUICE Product CI` has NEVER been green anywhere in this repository.** The prior audit's blocking defect **A12 is genuinely repaired** (verified by live network instrumentation, not by tests alone). All five prior residuals (EPI-1, TRUST-1, WORD-1, SEAM-DIV, DOC-NIT) landed and survived re-attack. Privacy repelled a harder battery than last cycle, including a cross-layer poison probe through the sanctioned producer. The candidate remains **BUILDING, not P0_READY**, solely because of the CI observation/permission gap.
 
 ---
 
 ## 1. Executive summary
 
-The mounted candidate is no longer architecture theater. It mounts all four lanes plus cross-seam integration tests, runs **363/363 tests in one suite** (`# skipped 0`), produces a deterministic economics-first demo, ingested a **live public GitHub repository end-to-end** (18 strictly-GET requests → 50 canonical events → balanced ledger → labeled report), and its new tenant→privacy producer bridge held up under an adversarial battery I designed to leak identifiers through it. The prior audit's X1 certainty defect is genuinely repaired — I re-attacked it with both failure directions plus cancellation variants.
+This cycle's claims check out where they can be executed, and I could execute almost everything from this environment:
 
-The falsification that stuck is narrow and precisely scoped (**A12**): `runGithubReadOnly()` forwards an *optional* `policy` to `collectHistory()`, but the adapter makes policy **mandatory** (`normalizePolicy(undefined)` throws) and the CLI has **no flag or env var** to supply one. Result: every `npm run demo -- --github OWNER/REPO` invocation dies pre-network with exit 3 regardless of token validity. I proved zero network activity with an instrumented `fetch` counter (0 calls, 25 ms). The committed integration test masks this because its "CLI upstream failure" case matches the same stderr regex for either cause and its failing transport is never reached. The library capability itself works — my live probe through `scripts/live-github-audit-probe.mjs` (which supplies a policy inline) completed against real `api.github.com`.
+- **397/397 tests pass** (`npm test`, zero skipped), including 14 cross-package integration seam tests and 89 core tests.
+- The synthetic demo is deterministic (two runs byte-identical) and its arithmetic is internally exact to the micro-dollar: findings $4.15 + $1.83 + $2.07 + $0.94 = **$8.99** = headline; measured $28.57; representable $30.17; $15.085/accepted displayed as $15.09 with the exact value disclosed; ratio 31.47%.
+- **A12 is closed at the product surface**: the committed `--github` CLI now performs REAL network I/O. My instrumented probe recorded `fetch_calls=1`, a genuine upstream `401 for GET /repos/octocat/Hello-World/pulls`, exit 3 with typed `UPSTREAM_ERROR` — versus the prior cycle's pre-network `TypeError` with zero fetches. Policy misconfiguration fails fast pre-network (exit 2); missing token refuses with setup guidance (exit 2).
+- I additionally ran a **live positive-path read-only audit against real api.github.com** (19 strictly-GET requests → 7 PRs → 54 canonical events → balanced ledger → report labeled `real-github-read-only`, costs honestly unavailable, 6 certain-waste findings emitted with unquantified units at $0.00).
+- The privacy gate held against every negative I could construct, including identifier poisoning of every ref/meta field of a tenant ledger pushed through the sanctioned producer bridge into the export envelope: zero needles survive.
+- Every "certain waste" rule abstained exactly when it should across 28 new adversarial probes at both the core and product layers.
+
+The one falsification that stuck is **CI**: `integration_ci_green=false` in `state/factory.json` is honest, but understated. Public API evidence shows **zero Actions runs ever on `lab/integration`** and **15/15 failures of Product CI on `main`** — because `main` contains no product code at all (26 files, no packages/, no tests), so the guard correctly fails "No test files found". CI-green has therefore never been demonstrated anywhere, remote or local-on-main. Everything else stands.
 
 ---
 
 ## 2. Environment and exact commands
 
 ```
-node v22.23.2, npm 10.9.8, linux
-repo: /home/runner/work/Beetlejuice/Beetlejuice @ bc0f974 (= origin/lab/integration)
-probes preserved under /tmp/opencode/audit32936499446/
+node v22.23.2, npm 10.9.8, linux x64
+repo: /home/runner/work/Beetlejuice/Beetlejuice @ d56e0c4 (= origin/lab/integration; product code identical to 25bb22c)
+probes preserved under /tmp/opencode/probe_*.mjs
 ```
 
 | # | Command | Result |
 |---|---------|--------|
 | E1 | `npm install --ignore-scripts` | exit 0, 0 vulnerabilities |
-| E2 | `npm test` | exit 0 — `# tests 363 / # pass 363 / # fail 0 / # skipped 0` |
-| E3 | `npm run demo` | exit 0 — `$28.57 measured · 2 accepted · $15.09 per accepted outcome · $8.99 certainly avoidable (31.47%)`, findings F-001..F-004 each with tenant-scope evidence refs and component breakdowns |
-| E4 | demo ×2 → `diff` | byte-identical after npm banner (deterministic) |
-| E5 | demo `--format json` → recompute | findings sum = `$8.99` = headline; trace IDs `F-001..F-004`; ratio 31.47% ✓ |
-| E6 | probe `probe-waste-core.mjs` (battery 1) | X1 regressions PASS (passed→failed abstains; failed→passed flip poisons partition); positive control charges per-run; cancelled repeat abstains; unknown-cost repeat emits unquantified unit at $0; engine strip prevents double count ($2.2 known fully attributed, refs disjoint); backwards supersession rejected at reconstruction; outcome probes O1–O4 correct |
-| E7 | probe `probe-privacy.mjs` (battery 2) | maximally identifier-poisoned ledger (org/repo/branch/SHA/email/URL in task refs, execution refs, revision keys, source refs+meta): mapped GLR admitted, **zero needles in record or envelope**; hostile values in allowed keys rejected (`url_detected`, `high_entropy_blob_detected`); forbidden hint keys rejected with precise codes; unique combination among 20 common records suppressed below k=5 floor while crowd admitted; missing purpose / unlicensed research blocked; identical economics across tenants → byte-identical GLRs; unknown CI status fail-closed; partial token coverage stays unknown |
-| E8 | probe `probe-product-waste.mjs` (battery 3) | post-abort execution charged, pre-abort untouched; unprovable abort timing abstains; failed outcome never misattributed to abort rule; successful retry guarded (R2); backwards supersession guarded; cost-per-success identity holds over measured+estimated with unavailable counted-not-summed |
-| E9 | `node apps/cli/src/demo.js --github acme/widget` (no token) | exit 2 + setup guidance, no fabricated audit ✓ |
-| E10 | `BEETLEJUICE_GITHUB_TOKEN=ghp_fake… node apps/cli/src/demo.js --github octocat/Hello-World` | **exit 3 — `GITHUB AUDIT FAILED (TypeError): an explicit policy is required…` — NOT an upstream failure** |
-| E11 | E10 instrumented: global `fetch` call counter | **fetch invocations = 0, elapsed 25 ms** → factory's "real TLS call" claim falsified on this tree |
-| E12 | `node scripts/live-github-audit-probe.mjs` (live api.github.com, eubby06/kids-store, policy supplied inline, no credentials) | exit 0 — 18 live GETs → 6 PRs → 50 canonical events → report labeled `real-github-read-only`; costs honestly unavailable; 5 certain superseded-execution findings with unquantified units, `$0.00` never invented |
-| E13 | `node --test test/integration/*.test.*` | 11/11 seam tests pass incl. adapter-bundle→CLI `--input` (A7 regression) and producer→gate→export (A10) |
-| E14 | CI guard find executed in workdir and pristine `git archive HEAD` checkout | workdir 206 files (incl. vendored `.opencode` zod tests), pristine **57 first-party ≥ floor 1** → guard green both ways |
-| E15 | `--input apps/cli/fixtures/synthetic-audit-v2.json` | exit 0, $28.57 flows verbatim; legacy v1 fixture correctly refused with migration pointer |
-| E16 | tenant isolation negatives + frozen snapshot probe | no cross-ledger visibility; `events().push` throws |
+| E2 | `npm test` | exit 0 — `# tests 397 / # pass 397 / # fail 0 / # skipped 0 / # todo 0` |
+| E3 | `npm run demo` ×2 → `diff` | exit 0 both; **byte-identical** |
+| E4 | demo economics recompute | F-001..F-004 sum 8,990,000µ$ = $8.99 = headline; measured $28.57; representable $30.17; $30.17÷2 = $15.085 → "$15.09 (exact value preserved as $15.085)"; ratio 31.47% ✓ |
+| E5 | `node apps/cli/src/demo.js --input apps/cli/fixtures/synthetic-audit-v2.json` | exit 0 — same economics verbatim ($28.57 / 2 accepted) |
+| E6 | `node apps/cli/src/demo.js --core-audit apps/cli/fixtures/core-audit-export-v1.json` | exit 0 — canonical-core mode renders ($12.65 measured, $5.45 waste, mode labeled) |
+| E7 | `node apps/cli/src/demo.js --input apps/cli/fixtures/legacy-v1/synthetic-audit-v1.json` | refused with `INVALID NORMALIZED INPUT … schema_version "1" … migrateNormalizedBundleV1ToV2` (migration pointer works) |
+| E8 | `node apps/cli/src/demo.js --out /tmp/opencode/outdir` | wrote `audit-report.md` + `audit-report.json` |
+| E9 | `unset BEETLEJUICE_GITHUB_TOKEN; node apps/cli/src/demo.js --github acme/widget` | exit 2 `[GITHUB_TOKEN_MISSING]` + setup guidance; no fabricated audit |
+| E10 | `BEETLEJUICE_BRANCH_PREFIXES="a b" BEETLEJUICE_GITHUB_TOKEN=fake … --github acme/widget` | exit 2 `[GITHUB_POLICY_ENV_INVALID]` **before any request** (fail-fast policy validation) |
+| E11 | instrumented `runCli(['--github','octocat/Hello-World'])` with fake token, global fetch counter | **exit=3 fetch_calls=1 elapsed≈225ms — `GITHUB AUDIT FAILED (GithubAdapterError UPSTREAM_ERROR): upstream 401 for GET /repos/octocat/Hello-World/pulls`** — real TLS I/O through the committed CLI (A12 falsification test of the prior cycle now inverted: the wiring works) |
+| E12 | `node scripts/live-github-audit-probe.mjs eubby06/kids-store` (real api.github.com, unauthenticated, GET-only) | exit 0 — **19 live GETs → 7 PRs → 54 canonical events**, report labeled `real-github-read-only`, 5 accepted outcomes, 6 certain superseded-execution findings, cost components honestly `$0.00/unavailable` |
+| E13 | `node --test test/integration/github-real-mode.test.js` | 8/8 pass — incl. CLI success path THROUGH `runCli(['--github',…])` with injected transport (`report.mode=real-github-read-only`, policy disclosure), upstream case asserts `UPSTREAM_ERROR\|NETWORK_ERROR_REDACTED` **and `callCount()>0`** (A12-MASK repaired), malformed env → exit 2 pre-network (`callCount()==0`), emptied policy → exit 2 `matched 0 of 1 pull request(s)` AFTER sweep succeeded |
+| E14 | `node --test test/integration/github-bundle-input-seam.test.js test/integration/privacy-audit-producer.test.mjs` | 6/6 pass |
+| E15 | `probe_privacy.mjs` (27 checks) + manual follow-ups | gate rejects repository_name / commit_sha / pr_number / developer_login / html_url / api_key / prompt_text / customer_id / tenant_hash; enum-field secret smuggling neutralized; free-text `agent_name` with internal URL rejected; custom agent/model names classified, never echoed; rare combination suppressed; unique record never admitted row-level; purpose required; research licence gate holds; DP flag/aggregate/seed misuse all rejected; cohortThreshold=1 rejected (floor ≥5 per purpose in practice); DP reproducible under fixed seed, seed-dependent, seed never published, counts clamped integers; cost_usd 5.01 vs 9.99 → byte-identical rows in bucket `1_to_10` |
+| E16 | `probe_econ_waste.mjs` (17 checks) | dup-CI overlapping windows / non-passed-partition / null-revision partition all ABSTAIN; det-retry transient-first / success-in-group / mode-disagreement all ABSTAIN; inverted supersession rejected (`BAD_SUPERSESSION`); positive controls charge exactly; engine double-count strip exact ($0.50 not $0.60); unresolved ≠ success with cost on books; closed-unmerged → failed; merged+revert flagged; unknown compute counted-not-summed; bundle with `total != Σ components` REJECTED; raw GitHub payload field rejected by normalized-input contract |
+| E17 | `probe_product_waste.mjs` (11 checks) | RT-2 v1.2.0 mode-disagreement retry abstains (positive twin charges); R2 successful-retry abstains; WORD-1 wording conditional on `ended_at` (both directions verified); missing `aborted_at` abstains; pre-abort start untouched; R4 non-later replacement abstains; single-claim guard prevents double counting across rules; additive totals exact |
+| E18 | `probe_tenant.mjs` (5 checks) | no cross-ledger visibility; frozen `events()` snapshot resists push-corruption; duplicate event_id rejected (`DUPLICATE_EVENT_ID`) |
+| E19 | `probe_cross_privacy.mjs` (4 checks) | ledger poisoned in task_ref/execution_ref/revision_key/invocation_ref/tool_ref/ci_ref/pr_ref/source.adapter/source.ref/source.meta → mapped through `mapAuditTaskToPrivacyInput` → exported: **zero needles** (incl. timestamps, org names, SHAs, secrets); out-of-vocab semantic hint rejected without echoing content |
+| E20 | pristine `git archive HEAD` checkout + both guard expressions | current ci.yml floor: 59 ≥ 1 ✓; proposed first-party floor: 59 ≥ 20 ✓ |
+| E21 | public API `repos/Mickalive/Beetlejuice/actions/runs?branch=lab/integration` | **total_count = 0** (no run ever, any conclusion) |
+| E22 | public API all runs, filter `BEETLEJUICE Product CI` | **15 runs, ALL on main, ALL `completed failure`** (run #15 @ 34ed2c31 … run #1 @ de560301). Failure step: "Require a real test suite" → main tree has **26 files total, 0 test files, no packages/apps dirs** |
+| E23 | `git ls-tree -r --name-only main \| wc -l`; test-file count | 26 files; **0** matching test patterns — red CI on main is structurally guaranteed until the candidate lands |
 
 ---
 
@@ -48,134 +62,109 @@ probes preserved under /tmp/opencode/audit32936499446/
 
 | # | Criterion | Verdict | Evidence |
 |---|-----------|---------|----------|
-| 1 | `AGENTIC_TASK` canonical model, versioned | **PASS** | Vendor-neutral event types with strict payload specs (packages/core/src/events.js); every stored event stamped `schema_version/event_version/collector_version/normalization_version` (verified in E6 fixtures); fail-closed normalization rejects unknown fields/types; adapter-extensibility suite proves a second platform maps in without schema change; live events from GitHub accepted unmodified (E12). |
-| 2 | GitHub adapter ingests realistic Actions/PR evidence into the model | **PASS** | Live execution E12: 18 GET-only requests → 50 canonical events into real `TenantLedger` with zero shims; committed fixture e2e (E13); collector enforces bounded sweep + data minimization (check-runs probed only for ingested PR revisions). |
-| 3 | Cost accounting identity `inference+tools+CI+compute(+validation/human) = total` | **PASS** | Identity holds by construction over canonical components; exporter refuses unbalanced ledgers (export.js UNBALANCED_LEDGER guard); product validator enforces `total_amount_micro_usd == Σ representable components` per execution (schema.js L173–181); unavailable components counted, contribute $0, never guessed (E3/E12/E15). |
-| 4 | Conservative outcome attribution | **PASS** | Priority merged > task_failed > closed-unmerged > aborted > unresolved; unresolved stays `partial` with cost visible (O4); revert flags accepted-but-reverted work (O1) and privacy mapping demotes it to `revert` rather than claiming acceptance; nothing counts unresolved as success. LOW divergence noted (§5 SEAM-DIV). |
-| 5 | ≥1 certain-waste detector end-to-end with evidence | **PASS** | Dup-CI X1 repaired (G5) and verified under both failure directions + cancellation (E6); det-retry R1/G2/G3 hold incl. unknown-cost honesty; superseded rule validated at reconstruction (strictly-later replacement) and produced evidence-backed findings on LIVE data (E12) with unquantified units kept out of dollar totals; engine strip guarantees no double counting (E6 S1). Residual epistemic observations logged (§5), none falsify a shipped finding. |
-| 6 | Synthetic demo produces complete audit without external account | **PASS** | E3/E4/E5: complete economics-first audit, deterministic, zero credentials, sanity notes present, speculative savings explicitly unestimated. |
-| 7 | Read-only GitHub mode runs when token/app credential is supplied | **FAIL — A12** | The committed product surface (`demo.js --github`) cannot complete ANY audit: mandatory classification policy is never wired and no flag/env exists to supply it; fails pre-network for every invocation (E10/E11). Library path + probe script DO work live (E12), so this is wiring, not capability. Smallest repair in §8. |
-| 8 | Report leads with cost/outcome and avoidable waste, not tokens | **PASS** | Demo and live reports open with headline economics table; tokens confined to "Secondary diagnostics (not economics)"; every savings dollar traces to finding IDs (E5); data-quality section separates measured/estimated/unavailable. |
-| 9 | Global-learning export contains no source content/linkable identity | **PASS under attack** | Battery E7 beyond committed tests: poisoned identifiers in every ref/meta field, hostile values in allowed keys, near-miss key names, unique-combination re-identification, purpose/license gates, float micro→USD bucketing — all repelled; closed-world 17-field enum+boolean GLR; byte-identical records across tenants. |
-| 10 | Privacy/re-id/cost/outcome/isolation tests pass | **PASS** | 363/363, zero skipped (E2), including dedicated reidentification/joinkeys/content-defense/tenant-isolation/accounting suites and three cross-package seam suites executed on the integrated tree (E13). |
-| 11 | README quickstart; synthetic vs real clearly distinguished | **PASS (with A12 contamination noted)** | Local quickstart verified reproducible (E1–E3); modes explicitly labeled (`synthetic demo`, `normalized-input`, `canonical-core`, `real-github-read-only`) and mutually exclusive. However the README's real-mode quickstart command is exactly the broken A12 surface — docs currently advertise an unrunnable command. |
-| 12 | CI green on integration candidate | **PASS by local execution; remote run unobserved** | All four CI steps executed locally on HEAD bc0f974: install ✓ (E1), guard ✓ (E14: 57 pristine ≥ 1), npm test ✓ (E2), demo ✓ (E3). Remote Actions status is not observable from this environment (gh unauthenticated) — factory's own `integration_ci_green:false` is honest bookkeeping of exactly that gap. |
+| 1 | `AGENTIC_TASK` canonical model, versioned | **PASS** | Stored events stamped `schema_version/event_version/collector_version/normalization_version` (probed directly: all four present); fail-closed payload specs (my `tokens` typo was rejected `FORBIDDEN_FIELD` — unknown fields cannot enter); vendor neutrality proven by fictional GitForge adapter suite (89 core tests incl. waste findings without special-casing). |
+| 2 | GitHub adapter ingests realistic Actions/PR evidence without becoming the domain | **PASS** | Live execution E12 (19 real GETs → 54 canonical events into a real `TenantLedger`, balanced); committed fixture e2e + canonical-contract suites enforce that GitHub values stay in adapter metadata (`source.*`), never domain keys. |
+| 3 | Cost identity `inference+tools+CI+compute(+validation/human)=total` | **PASS** | Enforced at three boundaries: event schema (unknown fields/cost shapes fail-closed), normalized-input validator (`total_amount_micro_usd != Σ representable components` rejected — probed E16), core exporter UNBALANCED_LEDGER guard; unknown-cost components counted, contribute $0, never guessed (E16 C4). Demo arithmetic exact (E4). |
+| 4 | Conservative outcome attribution | **PASS** | Priority merged > task_failed > closed-unmerged > aborted > unresolved; unresolved stays partial with cost visible and is never counted successful (E16 C1); revert flags accepted-but-reverted work (E16 C3); privacy mapping demotes reverted acceptance to `revert`. |
+| 5 | ≥1 certain-waste detector end-to-end with evidence | **PASS** | Four rules ship with evidence-unit breakdowns; every certainty precondition I attacked abstained correctly (E16/E17): overlap, mixed-status partitions, null revisions, transient-first premises, success-poisoned groups, mode-disagreement retries, backwards supersession, unprovable abort timing, non-later replacements. Double counting impossible by construction (claimed-unit strip, verified both layers). Findings also produced on LIVE data (E12). |
+| 6 | Synthetic demo complete without external account | **PASS** | E3–E5: deterministic, economics-first, zero credentials, every savings dollar traced to finding IDs, speculative savings explicitly unestimated. |
+| 7 | Read-only GitHub mode runs when credential supplied | **PASS** | A12 repaired and verified three ways: (a) committed CLI-driven success-path test with injected transport passes (E13); (b) committed CLI performs real network I/O and fails honestly upstream with an invalid token (E11 — the exact probe that caught A12 last cycle now exercises the repaired path); (c) full live pipeline executes against a real public repository (E12). Residual: a positive-path run *through the CLI binary* with a valid token was not executable from this environment (no credential available here); the committed success test + live library path cover the seam. |
+| 8 | Report leads with cost/outcome/waste, not tokens | **PASS** | Headline table opens with period/tasks/cost/successful outcomes/cost-per-outcome/avoidable spend; tokens confined to "Secondary diagnostics (not economics)"; data-quality section separates measured/estimated/unavailable; JSON report keys confirm structure (E4). |
+| 9 | Global-learning export contains no source content/linkable identity | **PASS under attack** | Closed-world 17-field enum GLR; allowlist transform rejects near-miss keys with precise codes; content defense rejects hostile values inside allowed text fields; cohort floors suppress unique combinations (k≥5 effective everywhere); DP aggregates hide exact counts, seed caller-private and never published; cross-layer poison probe clean (E15/E19). No deterministic pseudonym join key exists anywhere in the schema (no id/hash field can be expressed). |
+| 10 | Privacy/re-id/cost/outcome/isolation tests pass | **PASS** | 397/397 zero-skipped (E2) plus my independent batteries (E15–E19) all green. |
+| 11 | README quickstart; synthetic vs real distinguished | **PASS** | Every advertised command executed (E1–E9); modes labeled `synthetic demo` / `normalized-input` / `canonical-core` / `real-github-read-only` and mutually exclusive; README documents token + policy env vars, `-` opt-out, fail-fast behavior, refusal semantics — all verified true by execution. |
+| 12 | CI green on integration candidate | **FAIL** | Local CI steps all pass on HEAD (E1–E3, E20), but remote CI has never observed this candidate: **0 Actions runs ever on `lab/integration`** (E21) and Product CI is **red 15/15 on `main`** because `main` carries zero product code/tests (E22/E23). `state/factory.json` honestly records false and does not claim P0_READY — bookkeeping accurate, but the criterion is objectively unmet. |
 
-**Score: 10 PASS · 1 FAIL (#7, A12) · 1 conditional (#12).** P0_READY requires repairing A12 and observing the remote CI run.
-
----
-
-## 4. End-to-end data flow (all seams executed this cycle)
-
-| Seam | Status | Proof |
-|------|--------|-------|
-| GitHub source → core ledger (tenant analytics) | **WORKS — proven live** | E12: real api.github.com, GET-only, 50 events, balanced ledger, conservative attribution (5 accepted / 1 unresolved on a living repo). |
-| Core audit → product surface (`--core-audit`) | **WORKS** | E12 renders via `buildReportFromCoreAudit`; committed seam tests pass (E13). |
-| Adapter → normalized bundle → product `--input` (A7) | **WORKS — closed** | `buildNormalizedBundle` exists in packages/github sharing the event mappers' correlation decisions; committed round-trip test passes (E13); bundle deliberately emits NO superseded/retry relations from bare commit succession (correctly refuses to manufacture certain waste). |
-| Tenant analytics → privacy gate → global export (A10) | **WORKS — closed and attacked** | `mapAuditTaskToPrivacyInput` extracts only numbers/enums/booleans; battery E7 shows nothing identifier-shaped survives; cohort floors suppress rare combinations from small tenants (committed test) and unique rows among crowds (my probe). |
-| Real mode CLI wiring (A11) | **BROKEN — A12** | E10/E11. Everything behind it works (E12); the last inch — supplying the mandatory operator policy — is missing. |
+**Score: 11 PASS · 1 FAIL (#12).** Per the stop rule this is not P0_READY, and per the director contract `continue=true` with status `BUILDING` is correct bookkeeping.
 
 ---
 
-## 5. Certain-waste falsification attempts (every rule re-attacked)
+## 4. Certain-waste falsification attempts — every rule re-attacked
 
-**WASTE_DUP_CI_V1 — holds after X1 repair.** G5 now abstains the whole partition when any run terminated non-passed: passed→failed charged-nothing (prior defect), failed→passed flip poisons later repeats, cancelled repeat abstains, positive control still charges each post-pass repeat individually. Missing timing (G4), differing revisions (G2/R3), overlapping runs (G3), absent equivalence key (G1) all abstain. Residual **TRUST-1 (LOW)**: when adapters omit `revision_key` entirely AND key equivalence on configuration alone, runs at different actual revisions land in the shared null partition and were charged by my probe (A-N2). This violates the documented SHOULD (`equivalence_key ≡ f(revision, config)`), so it is an adapter-contract trust residual, not a core bug — but requiring revision presence (or embedding it in the key) would close it.
+All prior-cycle residuals were confirmed repaired by execution, then re-attacked with new negatives:
 
-**WASTE_DET_RETRY_V1 — holds; one epistemic asymmetry logged.** Success poisons the group (R1 re-verified); first deterministic failure free; blind repeats charged; unknown costs emit unquantified units at $0. **EPI-1 (LOW-MEDIUM)**: a retry failing with a *different, non-deterministic* class after a deterministic failure is still charged (core D1; product layer RT-2 behaves identically). Unlike X1 there is no self-contradiction — the charged retry did not succeed, so "could not succeed" was not falsified — but observed mode-variance weakens the same premise dup-CI's G5 treats as disproof. Either align (treat class-disagreement as poisoning) or document the asymmetry explicitly in the rule header.
+- **WASTE_DUP_CI_V1** — G5 (any non-passed termination poisons the partition) and G6 (null-revision partitions never produce findings) both hold; overlapping windows abstain (G3); missing timing abstains (G4); positive control charges each post-pass repeat individually. TRUST-1 from last cycle is closed: config-only equivalence keys can no longer manufacture cross-revision charges because unknown-revision partitions abstain entirely (E16 N2/N3).
+- **WASTE_DET_RETRY_V1 (+ product IDENTICAL_RETRY_AFTER_DETERMINISTIC_FAILURE v1.2.0)** — EPI-1/RT-2 alignment is real and symmetrical across layers: a post-premise repeat whose own failure class differs poisons the whole group (core G4, product `retry_mode_disagreement` counter — E16 N6, E17). Success in group poisons (G1/R1); first failure stays free (G2); missing equivalence key abstains (G3); successful retry abstains at product layer (R2). Positive twin controls still charge (both layers).
+- **WASTE_EXEC_SUPERSEDED_V1** — strictly-later replacement enforced at reconstruction (`BAD_SUPERSESSION` on inverted chains, E16 N7) AND at product layer (R4 guard counts abstentions). Charging a superseded exec whose replacement later failed remains documented hindsight accounting; defensible within stated epistemics.
+- **EXECUTION_AFTER_TASK_ABORT (product extension)** — only post-abort starts charged; missing `aborted_at` abstains; WORD-1 wording now conditions "ran to completion" on recorded `ended_at` (verified both directions, E17).
+- **Composition** — claimed-unit strips make totals exact under rule overlap (E16 P3: $0.50 attributed once, disjoint refs; E17 single-claim guard). Demo savings equal the exact sum of findings (E4).
 
-**WASTE_EXEC_SUPERSEDED_V1 — holds within its stated boundary.** Strictly-later replacement enforced at reconstruction (backwards chains rejected, E6-S3); charging a superseded exec whose replacement then failed remains defensible hindsight accounting (documented stance, E6-S2); engine strip keeps multi-rule totals exact (E6-S1: $2.20 known attributed once, disjoint refs).
-
-**EXECUTION_AFTER_TASK_ABORT (product-surface extension) — holds.** Only post-abort starts charged; pre-abort executions untouched; unprovable timing abstains; non-aborted outcomes never trigger it. **WORD-1 (LOW)**: explanation asserts "ran to completion" without checking `ended_at` — the avoidability claim stands regardless, but the wording claims more than the evidence shows when completion isn't recorded.
-
-**Composition/sanity.** Demo savings $8.99 = exact sum of F-001..F-004 (E5); per-execution single-claim guards prevent double counting in both layers; ratio computed against measured spend with a sanity note channel for ≥100%.
-
-**Cross-seam note (SEAM-DIV, LOW):** closed-without-merge attributes `failed` via the event path (PR-closed evidence) but `aborted` via the bundle path (explicit design note in bundle.js). Both are conservative non-success attributions; document the intentional divergence.
+No finding in the shipped fixtures or live output violates its rule preconditions. Nothing labeled "certain" is merely probable on this tree.
 
 ---
 
-## 6. Privacy / re-identification attack battery (E7 detail) — all repelled
+## 5. Demo-only vs real GitHub mode
 
-| Attack | Result |
-|--------|--------|
-| Ledger poisoned with org/repo/branch/commit-SHA/email/PR-URL across task refs, execution refs, revision keys, CI equivalence keys, `source.ref`/`source.meta` | mapped GLR admitted; serialized record and full export envelope contain **zero** needles (incl. timestamps and the word "github") |
-| Forbidden hint keys (`repository`, `customer_id`, `commit_hash`) | rejected with precise reason codes (`forbidden_repo_or_project_field`, `forbidden_customer_or_tenant_field`, `forbidden_vcs_ref_field`) |
-| Allowed KEY with hostile VALUE: repo URL as `agent_name`; high-entropy blob as `model_name` | content defense rejects before admission (`url_detected`, `high_entropy_blob_detected`) — raw value never echoed |
-| Out-of-vocab semantic hint (`task_class: fix_juliett_payment_gateway`) | `invalid_enum_value`; named-issue semantics cannot enter |
-| Unique combination among 20 common records (k floor 5, PRODUCT_TELEMETRY) | outlier suppressed, crowd admitted; risk block explains counts |
-| Lowering cohort threshold below absolute minimum (k=1 attempt) | `INVALID_COHORT_THRESHOLD` thrown — floors cannot be negotiated away |
-| Export without purpose / research purpose without licence acknowledgement | `PURPOSE_REQUIRED` / `LICENSE_ACKNOWLEDGEMENT_REQUIRED` (installation grants nothing — MASTER_PROMPT §13 honored) |
-| Float money from integer micros (0.232 USD) | bucketed `under_1`; raw magnitude absent |
-| Unknown CI terminal status | mapping throws — refuses to guess rather than mislabel |
-| Partial token coverage | no `tokens_total` derived; `token_bucket` defaults to `unknown` honestly |
-| Cross-tenant linkability | identical economics from differently-keyed tenants → byte-identical GLRs |
-
-Residual (unchanged, acceptable): the GLR intentionally carries coarse buckets only; wall-clock durations are never derived tenant-side unless explicitly pre-bucketed by policy.
+- **Synthetic demo**: labeled as such; no ingestion path exists for raw provider payloads (validator rejects GitHub marker keys — probed).
+- **Committed `--github` command**: now genuinely real. It resolves the classification policy pre-network (env override / explicit `-` opt-out / documented conservative default), refuses honestly on missing token or matched-nothing policies, performs real GET requests (instrumented: fetch_calls=1, live 401 surfaced as typed `UPSTREAM_ERROR`), and labels every report `real-github-read-only`.
+- **Library path**: proven live end-to-end against api.github.com during this audit (E12), producing honest unavailability rather than invented costs.
+- No simulation masquerades as GitHub data anywhere; conversely, the real mode can no longer be mistaken for dead code.
 
 ---
 
-## 7. Demo-only vs real GitHub mode
+## 6. Findings (highest severity first) and smallest repairs
 
-- **Synthetic demo**: labeled `synthetic demo — bundled fixture, no GitHub credentials used`; deterministic; no raw-payload ingestion path exists.
-- **Real mode, library + probe script**: genuinely real — E12 made 18 live TLS requests to api.github.com and produced a `real-github-read-only` report with honest unavailability. No simulation masquerades as GitHub data anywhere.
-- **Real mode, committed CLI command**: currently demo-grade in the opposite direction — it can NEVER produce output at all (A12). Until repaired, README's `--github` quickstart documents a dead command, and `state/factory.json`'s line recording "real TLS call … honest upstream failure" for that exact invocation is contradicted by instrumentation (E11: 0 fetches).
+### CI-NEVER-GREEN — P0 #12 unmet; CI has never passed anywhere (HIGH, carried/structural)
+- Evidence: E21 (lab/integration runs ever = 0), E22 (Product CI 15/15 failure on main), E23 (main has 26 files, 0 tests — the "Require a real test suite" guard fails correctly). Note: pushes made with the repository App/GITHUB_TOKEN do not trigger workflows, which is why lab/integration has no runs despite containing passing steps locally.
+- Impact: P0 cannot be declared; the default branch presents a docs-only repo with permanently red CI to any external observer.
+- Smallest repairs (in order of preference, all supervisor-side):
+  1. From a workflows-capable context, merge `lab/integration` (25bb22c/d56e0c4) into `main` — push-to-main triggers Product CI AND fixes the red-default-branch problem in one action; observe the run via the checks API; flip `integration_ci_green`.
+  2. Or create a PR `lab/integration` → `main` using a USER token (pull_request trigger fires CI; creating a PR does not require the workflows permission — only pushing workflow-file edits does).
+  3. Or grant the factory App the `workflows` permission so the pending `reports/ci-guard-proposal.md` hardening commit can land and future pushes self-verify.
 
----
+### MAIN-DIVERGENCE — default branch lacks the entire product (MEDIUM, structural observation)
+- Evidence: E23. `main` = control plane only; every product capability lives on lane branches. This is what makes CI-on-main meaningless and hides the product from anyone but the factory.
+- Smallest repair: same action as CI-NEVER-GREEN option 1 (merge candidate to main once CI is observed green).
 
-## 8. Findings (highest severity first) and smallest repairs
+### LIVE-REPORT-ZERO-DOLLARS — headline can read "$0.00 total / $0.00 per outcome" when no billing evidence exists (LOW, cosmetic honesty risk)
+- Evidence: E12 output — a real repository audit with zero supplied cost sources prints `Total measured cost **$0.00**` and `Cost per successful outcome **$0.00**`. Technically honest ($0 representable spend), but economically misleading at headline position; the data-quality section does disclose unavailability.
+- Smallest repair: when representable spend is $0 AND unavailable components > 0, render the headline cells as "no measurable cost evidence supplied" instead of "$0.00", keeping the numeric table unchanged.
 
-### A12 — PRODUCT/INTEGRATION: committed `--github` CLI mode is unrunnable; mandatory policy never wired (HIGH, NEW — blocks P0 #7)
-- Evidence: E10 (exit 3 `an explicit policy is required…`), E11 (0 fetch calls, 25 ms — pre-network), packages/github/src/policy.js L31–36 (policy mandatory), apps/cli/src/github_mode.js L88–94 (forwards only `...(policy ? {policy} : {})`), apps/cli/src/demo.js L129–133 (never supplies one; grep: no policy flag/env anywhere in apps/cli or packages/github src).
-- Impact: P0 criterion #7 fails at the product surface despite working library capability; README quickstart advertises a command that always fails; factory evidence line for this command is inaccurate.
-- Smallest repair: give `runGithubReadOnly` an operator-policy default resolved inside the CLI — e.g. read `BEETLEJUICE_BOT_ACTORS` / `BEETLEJUICE_BRANCH_PREFIXES` env vars (comma-separated), falling back to a documented conservative default built from the adapter's exported `SUGGESTED_AGENTIC_ACTORS` plus common agent prefixes; keep the existing optional override. Then (a) extend `test/integration/github-real-mode.test.js` with a success-path test driven THROUGH `runCli(["--github", ...])` using the injected transport, (b) re-run the live probe via the CLI command, (c) update factory evidence.
+### BOOKKEEPING-NIT — factory evidence line says "pushed head 25bb22c"; `git ls-remote` now returns d56e0c4 (LOW)
+- Evidence: `git ls-remote origin refs/heads/lab/integration` → `d56e0c4…`; diff 25bb22c..d56e0c4 touches only `state/factory.json`.
+- Smallest repair: next state update should cite "product head 25bb22c + state commit d56e0c4" to keep ls-remote checks trivially verifiable.
 
-### A12-MASK — INTEGRATION: real-mode test masks A12 by asserting an ambiguous regex (MEDIUM, NEW)
-- Evidence: test/integration/github-real-mode.test.js L172–186 — expects `/GITHUB AUDIT FAILED|UPSTREAM_ERROR|NETWORK_ERROR_REDACTED|error:/`; the missing-policy TypeError satisfies it, and the failing transport is explicitly unused (`void failing`). The suite reports green for a path it never exercises.
-- Smallest repair: assert the specific upstream code (`UPSTREAM_ERROR`/`NETWORK_ERROR_REDACTED`) and require `collection.requests.length > 0` in that test; add the CLI success-path test above so the regex can never mask wiring again.
-
-### EPI-1 — CORE+PRODUCT: retry rules charge retries whose failure MODE contradicts the determinism premise (LOW-MEDIUM, NEW observation)
-- Evidence: E6-D1 (charged $2 after invalid_request→provider_timeout on identical attempt key); E8 RT-2 (product layer identical).
-- Impact: defensible today (the charged retry did not succeed; classification trust documented), but inconsistent with dup-CI G5's "observed disagreement poisons certainty" epistemics; invites the next X1-style challenge.
-- Smallest repair: either treat any post-deterministic failure whose class differs from the established deterministic class as disproof (abstain group), or document the asymmetry explicitly in both rule headers with rationale.
-
-### TRUST-1 — CORE: null-revision partition mixes runs across actual revisions for config-only equivalence keys (LOW, documented residual)
-- Evidence: E6 A-N2 (charged across different revisions when `revision_key` absent everywhere).
-- Smallest repair (optional hardening): abstain unless `revision_key` present OR the docstring contract (`equivalence_key ≡ f(revision, config)`) is enforced somewhere observable; otherwise keep as documented adapter trust.
-
-### WORD-1 — PRODUCT: abort-rule explanation asserts "ran to completion" without checking `ended_at` (LOW)
-- Evidence: E8 AB-1 (execution with `ended_at: null` still described as completed).
-- Smallest repair: condition the phrase on `ended_at != null`, else "started afterwards".
-
-### SEAM-DIV — GITHUB: closed-unmerged PRs map `failed` (event path) vs `aborted` (bundle path) (LOW)
-- Evidence: task.js resolveOutcome vs bundle.js L222 comment. Both conservative; divergent vocabulary for the same repository depending on seam.
-- Smallest repair: one paragraph in NORMALIZED_INPUT.md stating the intentional difference and why.
-
-### DOC-NIT — docs: NORMALIZED_INPUT.md L41 imports `buildNormalizedBundle` from `apps/cli/src/index.js`; actual producer is `@beetlejuice/github` (LOW)
-- Smallest repair: fix the snippet (L62 already states it correctly).
-
-### CI-RESIDUAL — ci.yml still lacks `.opencode` prune (LOW, carried; proposal pending credential)
-- Evidence: E14 — workdir count 206 includes 149 vendored zod tests; pristine checkout unaffected (57 first-party ≥ floor 1, guard green). `reports/ci-guard-proposal.md` preserves the intended edit.
-- Smallest repair: land the proposal when a workflows-permitted credential exists (as factory already plans).
+### DP-SEED-COLLISION — different dpSeeds can yield identical published counts at high epsilon (INFO, expected statistics, not a defect)
+- Evidence: with ε=2 (scale 0.5) seeds 12345/999 produced 26 vs 25 for size-25 cohorts; at ε=0.1 the same seeds diverge 47 vs 19. Seed-dependence verified working; rounding can coincide at low noise scales.
+- Smallest repair: none required; optionally document that count equality across seeds is possible by construction.
 
 ---
 
-## 9. What held up under attack (credit where due)
+## 7. Verification of `state/factory.json` claims (this cycle)
 
-- **Every prior-audit repair landed and stuck**: X1/G5 (verified in both failure directions), A7 (`buildNormalizedBundle` + committed round-trip), A9/A11 (committed cross-package seam tests now run in CI), A10 (producer mapping + round-trip privacy test over real ledger shapes).
-- **The live pipeline is real**: unauthenticated, GET-only, bounded sweep of a living public repository reconstructed balanced economics and certain-waste findings whose unknown costs stayed honestly unquantified.
-- **Honesty mechanisms everywhere**: unknown ≠ zero; estimated ≠ measured; unresolved never success; speculative savings never estimated; unbalanced never exported; unique never exported; secrets never echoed.
-- **Factory bookkeeping mostly accurate**: 363-test, demo, and live-probe claims reproduced exactly; the lone inaccuracy is the fake-token TLS claim (E11) — everything else I re-executed matched.
+| Claim | Audit result |
+|---|---|
+| 397/397 tests on pushed head | ✅ reproduced exactly (E2) |
+| demo ×2 byte-identical; $28.57 / 2 accepted / $15.09 | ✅ reproduced exactly (E3/E4) |
+| A12 closed: instrumented rerun exit=3 fetch_calls=1 UPSTREAM_ERROR | ✅ reproduced independently before reading the claim (E11) |
+| CLI-driven success tests incl. callCount>0 assertions (A12-MASK) | ✅ committed tests pass and assert exactly that (E13) |
+| input seam $28.57 verbatim; no-token refusal exit 2 | ✅ (E5/E9) |
+| quickstart_docs flip justified | ✅ every advertised command executed successfully (E1–E9) |
+| pristine archive guard 59 ≥ 20 green | ✅ (E20) |
+| lab/integration Actions total_count=0 | ✅ confirmed via public API (E21) |
+| workflow-file push remote-rejected without workflows permission | consistent with observed App-token behavior; proposal doc preserved (reports/ci-guard-proposal.md) |
+| "every other criterion already flipped on executed evidence this cycle" | ✅ all 11 other criteria re-verified by execution above |
 
-## 10. Recommended next actions (in order, smallest first)
-
-1. **Repair A12 + A12-MASK** (env/default policy plumbing, CLI-driven success test, corrected assertions) — restores P0 #7 with roughly a day of scoped work.
-2. Re-run `scripts/live-github-audit-probe.mjs` **through the CLI command** and update `state/factory.json` evidence lines accordingly (delete the falsified TLS-call line).
-3. Confirm the remote Actions run on `lab/integration` (needs only authenticated visibility) and flip `integration_ci_green`.
-4. Address EPI-1 and WORD-1 (both are hours: one guard clause or two docstring paragraphs each).
-5. Land the CI-guard prune from `reports/ci-guard-proposal.md` when credentials allow.
-6. Optional hardening: TRUST-1 revision-presence guard; SEAM-DIV documentation; DOC-NIT import fix.
-
-Only then flip `p0_checks.real_read_only_github_mode` and declare P0_READY — each flip backed by an executed command recorded here.
+The state file is accurate on every point I could execute. Its one soft spot is framing, not fact: `next_action` says "sole remaining P0 item" — correct — but the CI gap is older than this cycle implies: CI has never been green on ANY ref (E22).
 
 ---
 
-*Audit method note: every verdict above is backed by an executed command or probe preserved under `/tmp/opencode/audit32936499446/`. Documentation, docstrings and committed tests were never accepted as runtime proof — the one place they diverged (A12/A12-MASK) is exactly where the audit caught it.*
+## 8. What held up under attack (credit)
+
+- **A12 repair is real**, verified by network instrumentation rather than by trusting tests; the masking test hole (A12-MASK) is closed with transport-call-count assertions.
+- **Every prior residual landed**: EPI-1 (both layers), TRUST-1 (G6), WORD-1 (conditional wording), SEAM-DIV (documented divergence NORMALIZED_INPUT.md §outcome mapping), DOC-NIT (correct producer reference).
+- **Privacy depth increased safely**: seeded Laplace DP with per-purpose epsilon ceilings was added WITHOUT weakening row-level gates; misuse shapes (ε without flag, DP without aggregate mode, missing seed, threshold below floor) are all rejected; seed never published; mechanism disclosed.
+- **Honesty mechanisms everywhere**: unknown ≠ zero; estimated ≠ measured; unresolved never success; unbalanced never exported; secrets never echoed; savings never speculative.
+- **Factory bookkeeping**: fully consistent with executed reality this cycle.
+
+## 9. Recommended next actions (ordered, smallest first)
+
+1. Execute CI on the candidate (supervisor-side; options in CI-NEVER-GREEN) and flip `integration_ci_green` from the observed run conclusion — the only open P0 item.
+2. Merge the candidate to `main` (fixes MAIN-DIVERGENCE and makes CI-on-main meaningful).
+3. Land `reports/ci-guard-proposal.md` (needs workflows permission) so scaffold-only green builds stay impossible.
+4. Optional LOW repairs: LIVE-REPORT-ZERO-DOLLARS headline wording; BOOKKEEPING-NIT citation precision.
+5. Only after (1) observes green: set status `P0_READY` per the stop rule.
+
+---
+
+*Audit method note: every verdict above is backed by an executed command or probe preserved under `/tmp/opencode/probe_*.mjs`. Documentation, docstrings, committed tests and state-file claims were treated as claims until re-executed — the two places where this audit's environment diverged from the state file's narrative (no valid GitHub credential available; remote CI unobservable) are recorded explicitly rather than smoothed over.*
