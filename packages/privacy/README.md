@@ -34,12 +34,15 @@ tenant observation
                            UUIDs, URLs, paths, emails, IPs, PR refs,
                            oversized/multiline/high-entropy blobs
   4. cohort-suppression    group by full abstract combination (content only,
-                           no join key); suppress groups smaller than the
-                           effective cohort threshold
+                            no join key); suppress groups smaller than the
+                            effective cohort threshold
   5. purpose-binding       export under exactly ONE explicit consent purpose;
-                           per-purpose minimum-cohort floors cannot be lowered
+                            per-purpose minimum-cohort floors cannot be lowered
+  5b. aggregate-statistics when publishing cohort counts, optional
+                            differential privacy: seeded Laplace noise,
+                            per-purpose epsilon ceilings, caller-private seed
   6. risk-summary          deterministic privacy_risk block explaining
-                           suppressed / generalized fields and gate activity
+                            suppressed / generalized fields and gate activity
 ```
 
 ## From tenant audit to global record (`src/audit-mapping.js`)
@@ -101,13 +104,56 @@ There is no id, no timestamp, no free text and no hash anywhere in the schema.
 This is an operational signal about gate activity. It is **not** a claim of
 anonymity and must never be presented as legal anonymization.
 
+## Differential privacy for published aggregates (`src/dp.js`)
+
+Cohort suppression alone does not protect published counts: an exact cohort
+size is itself information, and repeated exports of overlapping batches let a
+consumer difference two releases to recover individual contributions.
+`aggregateOnly` exports therefore support an opt-in Laplace mechanism
+(MASTER_PROMPT.md §6: "when publishing aggregate statistics, differential
+privacy where appropriate"):
+
+```js
+const result = exportGlobalLearningRecords({
+  purpose: GLOBAL_BENCHMARK_CONTRIBUTION,
+  records,
+  aggregateOnly: true,
+  differentialPrivacy: true,   // requires aggregateOnly + dpSeed
+  dpSeed: "quarterly-rotation-secret", // caller-private, NEVER published
+  epsilon: 2,                  // optional; defaults to the purpose ceiling
+});
+// result.aggregate_mode === "differential_private"
+// result.differential_privacy === { mechanism: "laplace", epsilon: 2, sensitivity: 1 }
+// result.cohorts[].size are noised integers (clamped ≥ 0)
+```
+
+Properties and policy:
+
+- **Deterministic.** Noise comes from a seeded PRNG (integer math only), so
+  identical requests stay byte-identical — the reproducibility invariant
+  holds even with noise. The seed never appears in the envelope: publishing
+  it would allow exact de-noising.
+- **Stable per cohort.** A cohort's draw is derived from `(seed, combination)`,
+  not batch position or run number. Overlapping exports under one seed reuse
+  the same draw per cohort, so repeated releases cannot be averaged together
+  to cancel the noise.
+- **Per-purpose epsilon ceilings** (the inverse of the cohort floors): callers
+  may lower epsilon (more noise, stronger protection) but never exceed the
+  ceiling. Absolute maximum for any purpose is `ABSOLUTE_MAXIMUM_EPSILON = 5`.
+- **Honest scope.** Sensitivity 1 gives record-level protection: one tenant
+  contributing many correlated rows gets weaker protection at the same
+  epsilon. Seed choice/storage/rotation is the caller's operational duty.
+  The mechanism covers published cohort counts; `suppressed`/`rejected`
+  entries remain gate-explanation metadata by design (WC-003 explanation
+  duty). This is an engineering control, **not** legal anonymization.
+
 ## Consent purposes (separate rights surfaces)
 
-| Purpose | Min cohort | License acknowledgement |
-| --- | --- | --- |
-| `PRODUCT_TELEMETRY` | 5 | not required |
-| `GLOBAL_BENCHMARK_CONTRIBUTION` | 5 | not required |
-| `EXTERNAL_RESEARCH_DATA_LICENSING` | 25 | **required** |
+| Purpose | Min cohort | Max epsilon (DP aggregates) | License acknowledgement |
+| --- | --- | --- | --- |
+| `PRODUCT_TELEMETRY` | 5 | 5 | not required |
+| `GLOBAL_BENCHMARK_CONTRIBUTION` | 5 | 2 | not required |
+| `EXTERNAL_RESEARCH_DATA_LICENSING` | 25 | 1 | **required** |
 
 Purpose is never inferred; it must be passed explicitly on every export.
 Callers may raise a cohort threshold but never lower it below the floor.
@@ -164,11 +210,14 @@ smuggling (including `__proto__`/`constructor` chain keys), raw magnitude
 bucketing boundaries, content-defense detection of every fake sensitive
 payload (assembled at runtime from harmless fragments — no credential-shaped
 literal ever appears in this repository), rare-combination suppression and
-cohort floors across purposes, tenant isolation/indistinguishability, join-key
-absence, reproducibility/versioning, benchmark-surface economics, the
-privacy-risk explanation block, and an end-to-end round trip from realistic
-identifier-poisoned audit aggregates proving no ref, digest, PR number,
-branch, adapter name or timestamp reaches the export.
+cohort floors across purposes, differential-privacy publication (seeded
+determinism, epsilon ceilings, per-cohort anti-differencing stability,
+no-seed-disclosure, exact-count non-leakage), tenant isolation/
+indistinguishability, join-key absence, reproducibility/versioning,
+benchmark-surface economics, the privacy-risk explanation block, and an
+end-to-end round trip from realistic identifier-poisoned audit aggregates
+proving no ref, digest, PR number, branch, adapter name or timestamp reaches
+the export.
 
 ## Non-goals
 

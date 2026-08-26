@@ -20,6 +20,7 @@ export const PRIVACY_TRANSFORM_VERSIONS = Object.freeze({
   "content-defense": "1.0.0",
   "cohort-suppression": "1.0.0",
   "purpose-binding": "1.0.0",
+  "differential-privacy": "1.0.0", // seeded Laplace noise on published aggregates
   "risk-summary": "1.0.0", // WC-003 privacy-risk result explaining the gate
 });
 

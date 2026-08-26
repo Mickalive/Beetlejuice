@@ -12,6 +12,9 @@
  * - `validateGlobalLearningRecord` / `isValidGlobalLearningRecord` — glr/1
  *   schema validation.
  * - `suppressRareCombinations` / `aggregateCohorts` — rare-combination defense.
+ * - `addPrivateNoiseToCohorts` / `effectiveEpsilon` — differential privacy for
+ *   published aggregate statistics (seeded, deterministic, per-purpose
+ *   epsilon ceilings; MASTER_PROMPT.md §6).
  * - `summarizePrivacyRisk` — deterministic explanation of suppressed and
  *   generalized fields for each export (WC-003 privacy-risk result).
  * - bucketing + classification helpers, vocabularies, purposes, versions.
@@ -96,12 +99,21 @@ export {
 
 export {
   ABSOLUTE_MINIMUM_COHORT,
+  ABSOLUTE_MAXIMUM_EPSILON,
   CONSENT_PURPOSES,
   EXTERNAL_RESEARCH_DATA_LICENSING,
   GLOBAL_BENCHMARK_CONTRIBUTION,
   PRODUCT_TELEMETRY,
   PURPOSE_POLICIES,
 } from "./purposes.js";
+
+export {
+  addPrivateNoiseToCohorts,
+  cohortNoiseState,
+  fnv1a32,
+  laplaceFromUniform,
+  mulberry32,
+} from "./dp.js";
 
 export {
   PRIVACY_RISK_LEVELS,
@@ -117,5 +129,6 @@ export {
 export {
   PrivacyExportError,
   effectiveCohortThreshold,
+  effectiveEpsilon,
   exportGlobalLearningRecords,
 } from "./exporter.js";

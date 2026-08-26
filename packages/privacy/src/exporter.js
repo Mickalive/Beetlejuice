@@ -13,6 +13,9 @@
  *   4. cohort-suppression   drop combinations rarer than the threshold
  *   5. purpose-binding      export only under ONE explicit consent purpose
  *                           with per-purpose policy floors
+ *   5b. aggregate-statistics when publishing cohort counts, optional
+ *                           differential privacy (seeded Laplace noise,
+ *                           per-purpose epsilon ceilings, seed stays private)
  *   6. risk-summary         deterministic privacy_risk block explaining
  *                           suppressed/generalized fields and gate activity
  *
@@ -28,6 +31,9 @@ import {
   CONSENT_PURPOSES,
   PURPOSE_POLICIES,
 } from "./purposes.js";
+import {
+  addPrivateNoiseToCohorts,
+} from "./dp.js";
 import { GLR_SCHEMA_VERSION } from "./vocab.js";
 import { validateGlobalLearningRecord } from "./schema.js";
 import {
@@ -72,6 +78,53 @@ export function effectiveCohortThreshold(purpose, requested) {
 }
 
 /**
+ * Validate a caller-private differential-privacy seed.
+ * Accepted shapes: non-negative safe integer, or non-empty string.
+ * The seed is never echoed into the export envelope.
+ *
+ * @param {unknown} seed
+ * @returns {number|string} normalized seed
+ */
+function validatedDpSeed(seed) {
+  if (
+    typeof seed === "number" &&
+    Number.isInteger(seed) &&
+    seed >= 0 &&
+    seed <= Number.MAX_SAFE_INTEGER
+  ) {
+    return seed;
+  }
+  if (
+    typeof seed === "string" &&
+    seed.length > 0 &&
+    seed.trim().length > 0
+  ) {
+    return seed;
+  }
+  throw new PrivacyExportError(
+    "INVALID_DP_SEED",
+    "dpSeed must be a non-negative integer or a non-empty string; it stays caller-private and is never published.",
+  );
+}
+
+/**
+ * Effective epsilon for differentially private aggregate publication:
+ * caller may LOWER it (more noise, stronger protection) but never exceed the
+ * purpose's policy ceiling — the exact inverse of the cohort threshold floor.
+ */
+export function effectiveEpsilon(purpose, requested) {
+  const ceiling = PURPOSE_POLICIES[purpose].maximumEpsilon;
+  if (requested === undefined) return ceiling;
+  if (typeof requested !== "number" || !Number.isFinite(requested) || requested <= 0) {
+    throw new PrivacyExportError(
+      "INVALID_EPSILON",
+      "epsilon must be a positive finite number.",
+    );
+  }
+  return Math.min(ceiling, requested);
+}
+
+/**
  * Export privacy-safe global learning records.
  *
  * @param {{
@@ -80,6 +133,9 @@ export function effectiveCohortThreshold(purpose, requested) {
  *   licenseAcknowledged?: boolean,
  *   cohortThreshold?: number,
  *   aggregateOnly?: boolean,
+ *   differentialPrivacy?: boolean,
+ *   epsilon?: number,
+ *   dpSeed?: number|string,
  * }} request
  * @returns {{
  *   export_kind: "beetlejuice.global_learning_export",
@@ -92,6 +148,8 @@ export function effectiveCohortThreshold(purpose, requested) {
  *   privacy_risk: ReturnType<typeof summarizePrivacyRisk>,
  *   accepted?: Record<string, string|boolean>[],
  *   cohorts?: {combination: Record<string, string|boolean>, size: number}[],
+ *   aggregate_mode?: "exact"|"differential_private",
+ *   differential_privacy?: {mechanism: "laplace", epsilon: number, sensitivity: number},
  *   suppressed: {reason_code: string, cohort_size: number, threshold: number, combination: Record<string, string|boolean>}[],
  *   rejected: {index: number, reason_code: string, field?: string}[],
  * }}
@@ -103,6 +161,9 @@ export function exportGlobalLearningRecords(request = {}) {
     licenseAcknowledged = false,
     cohortThreshold,
     aggregateOnly = false,
+    differentialPrivacy = false,
+    epsilon,
+    dpSeed,
   } = request;
 
   // --- purpose-binding (request shape) ---
@@ -125,6 +186,37 @@ export function exportGlobalLearningRecords(request = {}) {
       "External research / data-licensing exports require an explicit licence acknowledgement; installation alone never grants that right.",
     );
   }
+
+  // --- aggregate-statistics publication mode (request shape) ---
+  // Differential privacy applies to PUBLISHED AGGREGATES only; row-level
+  // exports have no meaningful per-record noise contract. DP parameters
+  // without the flag are rejected rather than silently ignored: an operator
+  // must never believe counts were noised when they were not.
+  if (!differentialPrivacy && (epsilon !== undefined || dpSeed !== undefined)) {
+    throw new PrivacyExportError(
+      "DP_NOT_ENABLED",
+      "epsilon/dpSeed require differentialPrivacy: true; refusing to silently drop privacy parameters.",
+    );
+  }
+  let normalizedDpSeed;
+  if (differentialPrivacy) {
+    if (!aggregateOnly) {
+      throw new PrivacyExportError(
+        "DP_REQUIRES_AGGREGATE_MODE",
+        "differentialPrivacy applies only to aggregateOnly exports; row-level exports are gated by cohort suppression instead.",
+      );
+    }
+    if (dpSeed === undefined) {
+      throw new PrivacyExportError(
+        "DP_SEED_REQUIRED",
+        "differentialPrivacy requires an explicit caller-private dpSeed; it is never inferred and never published.",
+      );
+    }
+    normalizedDpSeed = validatedDpSeed(dpSeed);
+  }
+  const effectiveEps = differentialPrivacy
+    ? effectiveEpsilon(purpose, epsilon)
+    : undefined;
 
   if (!Array.isArray(records)) {
     throw new PrivacyExportError(
@@ -209,7 +301,25 @@ export function exportGlobalLearningRecords(request = {}) {
   };
 
   if (aggregateOnly) {
-    envelope.cohorts = aggregateCohorts(candidateRecords, { threshold: k });
+    const exact = aggregateCohorts(candidateRecords, { threshold: k });
+    if (differentialPrivacy) {
+      envelope.aggregate_mode = "differential_private";
+      envelope.cohorts = addPrivateNoiseToCohorts(exact, {
+        epsilon: effectiveEps,
+        sensitivity: 1,
+        seed: normalizedDpSeed,
+      });
+      // Mechanism disclosure WITHOUT the seed: publishing the seed would let
+      // any consumer subtract the noise and recover exact counts.
+      envelope.differential_privacy = {
+        mechanism: "laplace",
+        epsilon: effectiveEps,
+        sensitivity: 1,
+      };
+    } else {
+      envelope.aggregate_mode = "exact";
+      envelope.cohorts = exact;
+    }
   } else {
     envelope.accepted = suppression.admitted;
   }
