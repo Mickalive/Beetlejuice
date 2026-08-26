@@ -42,6 +42,15 @@ export { runCli, printHelp } from "./demo.js";
 export {
   runGithubReadOnly,
   parseOwnerRepo,
+  parseOperatorList,
+  resolveOperatorPolicy,
   GITHUB_TOKEN_ENV,
+  BOT_ACTORS_ENV,
+  BRANCH_PREFIXES_ENV,
+  DEFAULT_AGENTIC_BRANCH_PREFIXES,
+  POLICY_SOURCE_EXPLICIT,
+  POLICY_SOURCE_OPERATOR_ENV,
+  POLICY_SOURCE_ADAPTER_SUGGESTED,
+  POLICY_SOURCE_PRODUCT_DEFAULT,
   REAL_GITHUB_MODE,
 } from "./github_mode.js";

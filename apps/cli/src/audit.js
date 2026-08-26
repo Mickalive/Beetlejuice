@@ -178,7 +178,10 @@ function coreTaskKnownCost(taskAggregate) {
  * evidence. No economics are recomputed here.
  *
  * @param {object} envelope parsed JSON of a beetlejuice_core_audit_export
- * @param {{ mode: "canonical-core" }} meta
+ * @param {{ mode: "canonical-core", classification_policy?: object }} meta
+ *   `classification_policy` (optional, real-github-read-only seam): discloses
+ *   the operator policy used to classify which PRs counted as agentic. Rendered
+ *   when present; never synthesized for other seams.
  */
 export function buildReportFromCoreAudit(envelope, meta) {
   const validation = validateCoreAuditExport(envelope);
@@ -288,6 +291,9 @@ export function buildReportFromCoreAudit(envelope, meta) {
       read_only: true,
     },
     period,
+    ...(meta.classification_policy
+      ? { classification_policy: { ...meta.classification_policy } }
+      : {}),
     headline: headlineFromValues({
       tasksTotal: totals.tasks,
       outcomes: {

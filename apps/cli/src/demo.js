@@ -4,7 +4,10 @@
 //   npm run demo -- --input FILE              → real read-only mode over adapter-normalized records
 //   npm run demo -- --core-audit FILE         → canonical-core mode over a TenantLedger.audit() export
 //   npm run demo -- --github OWNER/REPO       → real read-only audit of that repository
-//                                             (requires BEETLEJUICE_GITHUB_TOKEN; see README)
+//                                             (requires BEETLEJUICE_GITHUB_TOKEN; agentic
+//                                             classification via BEETLEJUICE_BOT_ACTORS /
+//                                             BEETLEJUICE_BRANCH_PREFIXES with a documented
+//                                             conservative default — see README)
 //   npm run demo -- --out DIR                 → also write audit-report.md / audit-report.json
 //
 // The surface never parses raw provider payloads: input must be either the
@@ -20,7 +23,14 @@ import { pathToFileURL } from "node:url";
 import { buildAuditReport, buildReportFromCoreAudit } from "./audit.js";
 import { renderMarkdownReport, renderJsonReport } from "./report/markdown.js";
 import { loadSyntheticFixture } from "./synthetic.js";
-import { GITHUB_TOKEN_ENV, parseOwnerRepo, runGithubReadOnly } from "./github_mode.js";
+import {
+  BOT_ACTORS_ENV,
+  BRANCH_PREFIXES_ENV,
+  DEFAULT_AGENTIC_BRANCH_PREFIXES,
+  GITHUB_TOKEN_ENV,
+  parseOwnerRepo,
+  runGithubReadOnly,
+} from "./github_mode.js";
 
 function parseArgs(argv) {
   const args = { input: null, coreAudit: null, github: null, out: null, format: "md" };
@@ -66,8 +76,15 @@ Options:
   --core-audit <file>  Path to a versioned packages/core TenantLedger.audit() export
                        (canonical-core seam: one canonical model does the economics).
   --github OWNER/REPO  Real read-only audit of that GitHub repository via its history.
-                       Requires ${GITHUB_TOKEN_ENV} to be set (fine-grained PAT or App token,
-                       read-only: Actions/Contents/Pull requests read). No writes are ever performed.
+                        Requires ${GITHUB_TOKEN_ENV} to be set (fine-grained PAT or App token,
+                        read-only: Actions/Contents/Pull requests read). No writes are ever performed.
+                        PRs count as agentic only when matched by a classification policy:
+                          ${BOT_ACTORS_ENV}        comma-separated bot logins (measured-agentic)
+                          ${BRANCH_PREFIXES_ENV}  comma-separated branch prefixes (inferred-agentic);
+                                                  "-" disables prefix matching
+                        Unset variables fall back to a documented conservative default
+                        (well-known coding-agent bot logins + tool-owned branch prefixes).
+                        The effective policy is disclosed in every report.
   --out <dir>          Write audit-report.md and/or audit-report.json into <dir>.
   --format <fmt>       md | json | both (stdout format; files honor it too)
   -h, --help           Show this help.
@@ -101,9 +118,13 @@ function readJsonFile(filePath) {
 
 /**
  * Programmatic entrypoint. Returns a process exit code.
+ *
  * @param {string[]} argv
+ * @param {object} [deps] test-only injection surface; the committed script path
+ *   passes nothing and always uses the real network transport.
+ * @param {Function} [deps.fetchImpl] injected GitHub transport for --github mode
  */
-export async function runCli(argv) {
+export async function runCli(argv, deps = {}) {
   let args;
   try {
     args = parseArgs(argv);
@@ -130,11 +151,28 @@ export async function runCli(argv) {
         owner: spec.owner,
         repo: spec.repo,
         token: process.env[GITHUB_TOKEN_ENV] ?? "",
+        ...(typeof deps.fetchImpl === "function" ? { fetchImpl: deps.fetchImpl } : {}),
       });
       report = ghReport;
     } catch (error) {
-      if (error.code === "GITHUB_TOKEN_MISSING" || error.code === "SIBLING_PACKAGES_MISSING") {
-        process.stderr.write(`error: ${error.message}\n`);
+      if (
+        error.code === "GITHUB_TOKEN_MISSING" ||
+        error.code === "SIBLING_PACKAGES_MISSING" ||
+        // Operator classification-policy misconfiguration is a setup problem,
+        // not an upstream failure: exit 2 with guidance, never a fake audit.
+        error.code === "GITHUB_POLICY_ENV_INVALID" ||
+        error.code === "GITHUB_POLICY_MATCHED_NOTHING"
+      ) {
+        process.stderr.write(
+          `error${error.code ? ` [${error.code}]` : ""}: ${error.message}\n`
+        );
+        if (error.code === "GITHUB_POLICY_ENV_INVALID") {
+          process.stderr.write(
+            `Fix the ${BOT_ACTORS_ENV}/${BRANCH_PREFIXES_ENV} values (comma-separated; "-" disables a dimension)` +
+              ` or unset them to use the documented conservative default` +
+              ` (${DEFAULT_AGENTIC_BRANCH_PREFIXES.length} tool-owned branch prefixes + adapter-suggested bot actors).\n`
+          );
+        }
         return 2;
       }
       process.stderr.write(
