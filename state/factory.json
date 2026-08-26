@@ -2,7 +2,7 @@
   "schema_version": "1",
   "status": "BUILDING",
   "continue": true,
-  "next_action": "IMPLEMENT_AND_EXECUTE_P0_5_IDENTIFIABLE_REAL_WORLD_CORPUS_GATE_BEFORE_P1",
+  "next_action": "IMPLEMENT_AND_EXECUTE_P0_5_ARCHITECTURE_LEARNING_AND_BILLING_CALIBRATION_GATE_BEFORE_P1",
   "blocking_reason": null,
   "p0_checks": {
     "canonical_agentic_task": true,
@@ -22,19 +22,23 @@
     "identifiable_primary_corpus_5_plus": false,
     "secondary_messy_robustness_set": false,
     "agent_task_model_provenance_confidence": false,
+    "architecture_schema_topology_policy_representation": false,
+    "architecture_reconstruction_manual_ground_truth": false,
+    "architecture_learning_hypotheses_falsifiable": false,
     "zero_crash_or_typed_refusal": false,
     "pagination_large_history": false,
     "rate_limit_network_adversarial": false,
     "classification_manual_ground_truth": false,
     "outcome_manual_ground_truth": false,
-    "certain_waste_precision_review": false,
+    "certain_structural_waste_precision_review": false,
     "determinism_on_frozen_real_evidence": false,
     "real_github_https_positive_path": false,
-    "billing_no_evidence_honesty_and_utility": false,
+    "billing_no_evidence_honesty_and_architecture_utility": false,
     "billing_partial_evidence_honesty": false,
     "billing_complete_evidence_accounting": false,
+    "local_real_billing_attachable_without_schema_redesign": false,
     "economic_or_learnable_corpus_path_proven": false,
-    "economic_calibration_path_defined": false,
+    "privacy_safe_global_architecture_export": false,
     "privacy_boundaries_preserved": false,
     "real_world_report_persisted": false,
     "integration_ci_green_after_repairs": false
@@ -53,24 +57,49 @@
     "integration_report": "reports/integration-runtime-status.txt",
     "adversarial_audit": "reports/latest-product-audit.md",
     "p0_5_binding_workcard": "docs/workcards/WC-007-REAL-WORLD-ROBUSTNESS.md",
-    "p0_5_reason": "P0 proves internal correctness but not real-world robustness or data-network viability. P0.5 must use a deliberately high-identifiability primary corpus where agent, task, model/configuration provenance, execution correlation and outcome are sufficiently observable for clean falsifiable hypotheses. Messy cases are a separate robustness set, not training ground truth. P0.5 passes only if complete economic labels are obtainable for a useful subset OR the high-confidence non-monetary corpus is demonstrably learnable and has a defensible later calibration path to economic labels."
+    "p0_5_reason": "P0.5 must prove that Beetlejuice learns a clean, high-confidence model of agentic automation architecture first. Cost is not the primary explanatory feature. Complete or partial real billing is attached tenant-locally as economic calibration/labels and may enter the global layer only as rights-cleared privacy-gated generalized labels. The canonical architecture model must remain useful without billing and accept later true billing without redesign."
+  },
+  "architecture_learning_policy": {
+    "primary_target": "Learn which automation architectures/configurations produce accepted useful work with lower structural waste for defined task contexts.",
+    "relation": "TASK_CONTEXT + AGENT_MODEL_CONFIG + AUTOMATION_ARCHITECTURE -> OUTCOME + LATENCY + STRUCTURAL_WASTE + RESOURCE_FOOTPRINT",
+    "topology_features": [
+      "execution graph/order",
+      "serial_parallel_fanout",
+      "agent_model_tool_handoffs",
+      "retry_policy_depth",
+      "escalation_fallback_policy",
+      "validation_reviewer_topology",
+      "ci_test_topology_duplication",
+      "cache_reuse",
+      "loop_depth_repeated_unchanged_work",
+      "termination_early_stop",
+      "supersession_cancellation_handling"
+    ],
+    "unknowns": "Unknown remains unknown. Inferred fields carry provenance/confidence and are never promoted silently to measured fact.",
+    "causality": "Cross-sectional correlations are hypotheses, not causal proof. Preserve intervention/before-after labels for later local autotuning."
   },
   "billing_evidence_policy": {
-    "github_only": "Report observable outcomes/retries/waste and data gaps; never claim total dollars or total cost per outcome without monetary evidence. Retain as a learning row only when hypothesis-critical labels satisfy the identifiability gate.",
-    "partial": "Compute only evidenced spend, label coverage and partiality, never extrapolate missing components. May serve partial economic calibration only when attribution is defensible.",
-    "complete": "Only complete evidenced and attributable components may be labeled total measured economic cost and total cost per successful outcome."
+    "github_only": "Architecture/outcome/waste remains useful where structurally defensible; never claim total dollars or total cost per outcome without monetary evidence.",
+    "partial": "Compute only evidenced spend, label coverage and partiality, never extrapolate missing components.",
+    "complete": "Only complete evidenced and attributable components may be labeled total measured economic cost and total cost per successful outcome.",
+    "role": "Billing is a local calibration/economic-label layer attached to the architecture model, not the foundational architecture signal."
   },
   "corpus_policy": {
-    "primary": "Small high-confidence corpus first. Prefer explicit agent/tool identity, recoverable task class, explicit or strongly constrained model/provider/configuration with provenance/confidence, defensible execution correlation, observable outcome and known completeness flags.",
+    "primary": "Small high-confidence architecture-learning corpus first. Prefer explicit agent/tool identity, recoverable task class, explicit or strongly constrained model/provider/configuration, defensible execution correlation, observable architecture topology/policy and observable outcome.",
     "secondary": "Messy ambiguous repositories test abstention, pagination, failures and robustness only; do not promote ambiguous labels to ground truth.",
-    "unknowns": "Unknown remains unknown. Inferred model/configuration labels must carry provenance/confidence and never be treated as measured fact."
+    "global_export": "Only unlinkable privacy-gated abstract architecture/task/outcome/resource/economic labels may leave the tenant boundary where rights permit."
   },
   "viability_paths": {
-    "path_1": "COMPLETE_ECONOMIC_LABELS: sufficiently attributed complete billing for a useful subset supports true measured total cost/outcome labels.",
-    "path_2": "LEARNABLE_HIGH_CONFIDENCE_CORPUS: clean structural labels support useful hypotheses even without complete billing, but a concrete economic calibration source (billing-labeled subset, prospective instrumentation or provider adapters) must be demonstrated."
+    "path_1": "COMPLETE_ECONOMIC_LABELS: sufficiently attributed complete billing for a useful subset supports true measured total cost/outcome labels on architecture rows.",
+    "path_2": "ARCHITECTURE_FIRST_CALIBRATION: clean architecture/outcome/resource rows are learnable before complete billing, and true billing can later attach as calibration labels without redefining the canonical model."
+  },
+  "customer_value_model": {
+    "without_full_billing": "Explain the customer's automation architecture, outcomes and defensible structural inefficiencies; disclose missing monetary evidence.",
+    "with_full_billing": "Use the customer's actual model/tool/CI pricing and attributable usage to calculate true local cost/outcome and map dollars onto the architectural inefficiencies.",
+    "future_global_model": "Use consented unlinkable architecture/outcome rows progressively calibrated by generalized real billing labels to learn which architectures work under which task conditions."
   },
   "p0_5_target": {
-    "objective": "real-world robustness plus identifiable economic-or-learning viability gate",
+    "objective": "real-world architecture learning plus local billing calibration viability gate",
     "minimum_real_repositories": 5,
     "preferred_real_repositories": 10,
     "report": "reports/real-world-robustness.md",
@@ -84,6 +113,7 @@
       "installation/repository scoping",
       "historical bootstrap audit",
       "incremental event ingestion",
+      "local provider/tool/CI billing evidence attachment",
       "explicit credential/environment setup documentation",
       "under-five-minute target when sufficient history is available"
     ]
