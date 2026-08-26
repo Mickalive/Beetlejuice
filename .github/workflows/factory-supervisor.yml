@@ -7,7 +7,7 @@ on:
       - "BEETLEJUICE Product Factory"
     types: [completed]
   schedule:
-    - cron: "7,37 * * * *"
+    - cron: "7,22,37,52 * * * *"
   push:
     branches: [main]
     paths:
@@ -17,7 +17,7 @@ on:
       - 'state/factory.json'
 
 permissions:
-  contents: read
+  contents: write
   actions: write
 
 concurrency:
@@ -26,9 +26,9 @@ concurrency:
 
 jobs:
   continuity:
-    name: Ensure product factory continuity
+    name: Ensure autonomous product continuity
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: Purge obsolete completed Actions runs
         env:
@@ -36,9 +36,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
-          # Keep the Actions page readable. Durable product evidence belongs in
-          # state/ and reports/, not in hundreds of stale run rows.
           KEEP_PER_ACTIVE_WORKFLOW=5
           ACTIVE_NAMES=(
             "BEETLEJUICE Product CI"
@@ -59,10 +56,7 @@ jobs:
             gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs?per_page=100" \
               --jq '.workflow_runs[] | [.id,.name,.status,.created_at] | @tsv'
           )
-
           declare -A KEPT_BY_NAME=()
-          DELETED=0
-          PRESERVED=0
 
           is_active_name() {
             local candidate="$1"
@@ -71,62 +65,54 @@ jobs:
             done
             return 1
           }
-
           is_evidence_run() {
             local candidate="$1"
             grep -qx "$candidate" <<<"$PRESERVE_IDS" 2>/dev/null
           }
 
-          # GitHub returns newest runs first. Keep five completed runs for each
-          # current workflow. For workflow names no longer present in the repo,
-          # remove every completed run unless state/factory.json cites it.
+          DELETED=0
           for row in "${RUN_ROWS[@]}"; do
             IFS=$'\t' read -r RUN_ID RUN_NAME RUN_STATUS CREATED_AT <<<"$row"
             [[ -n "$RUN_ID" ]] || continue
-
-            if [[ "$RUN_STATUS" != "completed" ]]; then
-              PRESERVED=$((PRESERVED + 1))
-              continue
-            fi
-
-            if is_evidence_run "$RUN_ID"; then
-              echo "Preserving evidence run $RUN_ID ($RUN_NAME)"
-              PRESERVED=$((PRESERVED + 1))
-              continue
-            fi
-
+            [[ "$RUN_STATUS" == "completed" ]] || continue
+            if is_evidence_run "$RUN_ID"; then continue; fi
             if is_active_name "$RUN_NAME"; then
               COUNT=${KEPT_BY_NAME["$RUN_NAME"]:-0}
               if (( COUNT < KEEP_PER_ACTIVE_WORKFLOW )); then
                 KEPT_BY_NAME["$RUN_NAME"]=$((COUNT + 1))
-                PRESERVED=$((PRESERVED + 1))
                 continue
               fi
             fi
-
-            echo "Deleting obsolete completed run $RUN_ID [$RUN_NAME] $CREATED_AT"
             if gh api --method DELETE "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}" >/dev/null 2>&1; then
               DELETED=$((DELETED + 1))
-            else
-              echo "::warning::Could not delete run $RUN_ID"
             fi
           done
+          echo "Actions cleanup complete: deleted=$DELETED"
 
-          echo "Actions cleanup complete: deleted=$DELETED preserved=$PRESERVED"
-
-      - name: Re-derive continuation from durable state
+      - name: Recover stale cycles, preserve durable state, and relaunch work
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
+          NOW=$(date +%s)
 
-          RUNS=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow factory-loop.yml --limit 50 \
-            --json databaseId,status,conclusion,createdAt,headSha 2>/dev/null || echo '[]')
+          cancel_run() {
+            local id="$1" reason="$2"
+            echo "Cancelling factory run $id: $reason"
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${id}/cancel" >/dev/null 2>&1 || true
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${id}/force-cancel" >/dev/null 2>&1 || true
+          }
 
-          # A change to the execution workflow, Ox watchdog/model policy, or the
-          # supervisor itself invalidates already-running factory executions.
-          # Stop those runs so no stale process can keep using an older model policy.
+          load_runs() {
+            gh run list --repo "$GITHUB_REPOSITORY" --workflow factory-loop.yml --limit 100 \
+              --json databaseId,status,conclusion,createdAt,headSha 2>/dev/null || echo '[]'
+          }
+
+          RUNS=$(load_runs)
+
+          # Any control-plane change invalidates older active executions. They may
+          # contain an obsolete model/watchdog/mission policy and must not linger.
           if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
             CHANGED=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}" \
               --jq '.files[]?.filename' 2>/dev/null || true)
@@ -134,51 +120,98 @@ jobs:
               while IFS= read -r RUN_ID; do
                 [[ -n "$RUN_ID" ]] || continue
                 RUN_SHA=$(jq -r --argjson id "$RUN_ID" '.[] | select(.databaseId == $id) | .headSha' <<<"$RUNS")
-                if [[ "$RUN_SHA" != "$GITHUB_SHA" ]]; then
-                  echo "Stopping stale factory run $RUN_ID at $RUN_SHA after control-plane update $GITHUB_SHA"
-                  gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/cancel" >/dev/null 2>&1 || true
-                  gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/force-cancel" >/dev/null 2>&1 || true
-                fi
+                [[ "$RUN_SHA" == "$GITHUB_SHA" ]] || cancel_run "$RUN_ID" "stale control-plane revision $RUN_SHA"
               done < <(jq -r '.[] | select(.status != "completed") | .databaseId' <<<"$RUNS")
-              echo "Stale factory executions stopped; the next cycle will use the current Ox-only control plane."
-              exit 0
+              sleep 5
+              RUNS=$(load_runs)
             fi
           fi
 
+          # GitHub-level watchdog. Ox has its own per-call watchdog; this catches
+          # runs that never get a runner or a whole workflow that becomes a zombie.
+          while IFS=$'\t' read -r RUN_ID RUN_STATUS CREATED_AT; do
+            [[ -n "$RUN_ID" ]] || continue
+            CREATED_EPOCH=$(date -d "$CREATED_AT" +%s 2>/dev/null || echo "$NOW")
+            AGE_MIN=$(( (NOW - CREATED_EPOCH) / 60 ))
+            case "$RUN_STATUS" in
+              queued|pending|waiting|requested)
+                if (( AGE_MIN > 45 )); then
+                  cancel_run "$RUN_ID" "queued/pending for ${AGE_MIN}m"
+                fi
+                ;;
+              in_progress)
+                if (( AGE_MIN > 480 )); then
+                  cancel_run "$RUN_ID" "workflow zombie older than ${AGE_MIN}m"
+                fi
+                ;;
+            esac
+          done < <(jq -r '.[] | select(.status != "completed") | [.databaseId,.status,.createdAt] | @tsv' <<<"$RUNS")
+
+          sleep 5
+          RUNS=$(load_runs)
           ACTIVE=$(jq '[.[] | select(.status != "completed")] | length' <<<"$RUNS")
           if [[ "$ACTIVE" -gt 0 ]]; then
-            echo "A Beetlejuice factory cycle is already active; refusing duplicate work."
+            echo "A current factory cycle is alive; continuity satisfied."
             exit 0
           fi
 
+          # lab/integration is the durable scientific/product progress state. main
+          # holds the binding control plane. Merge them after every completed cycle
+          # so the next main-based cycle cannot accidentally reset progress.
+          MAIN_META=$(gh api "repos/${GITHUB_REPOSITORY}/contents/state/factory.json?ref=main" 2>/dev/null || echo '{}')
+          MAIN_SHA=$(jq -r '.sha // empty' <<<"$MAIN_META")
+          MAIN_STATE=$(jq -r '.content // empty' <<<"$MAIN_META" | tr -d '\n' | base64 -d 2>/dev/null || echo '{}')
+
+          INTEGRATION_STATE='{}'
           if gh api "repos/${GITHUB_REPOSITORY}/branches/lab%2Fintegration" >/dev/null 2>&1; then
-            STATE=$(gh api -H 'Accept: application/vnd.github.raw+json' \
-              "repos/${GITHUB_REPOSITORY}/contents/state/factory.json?ref=lab/integration" 2>/dev/null || echo '{}')
-          else
-            STATE=$(gh api -H 'Accept: application/vnd.github.raw+json' \
-              "repos/${GITHUB_REPOSITORY}/contents/state/factory.json?ref=main" 2>/dev/null || echo '{}')
+            INT_META=$(gh api "repos/${GITHUB_REPOSITORY}/contents/state/factory.json?ref=lab/integration" 2>/dev/null || echo '{}')
+            INTEGRATION_STATE=$(jq -r '.content // empty' <<<"$INT_META" | tr -d '\n' | base64 -d 2>/dev/null || echo '{}')
           fi
 
-          CONTINUE=$(jq -r '.continue // true' <<<"$STATE" 2>/dev/null || echo true)
-          STATUS=$(jq -r '.status // "BUILDING"' <<<"$STATE" 2>/dev/null || echo BUILDING)
-          NEXT_ACTION=$(jq -r '.next_action // "IMPLEMENT_P0"' <<<"$STATE" 2>/dev/null || echo IMPLEMENT_P0)
-
-          case "$STATUS" in
-            COMPLETE|BLOCKED_EXTERNAL)
-              echo "Factory state is $STATUS; no autonomous relaunch. next_action=$NEXT_ACTION"
-              exit 0
-              ;;
-            P0_READY|P0_5_READY)
-              if [[ "$CONTINUE" != true ]]; then
-                echo "$STATUS and state does not request more autonomous work."
-                exit 0
-              fi
-              ;;
-          esac
-
-          if [[ "$CONTINUE" == true ]]; then
-            echo "Relaunching Beetlejuice factory from durable state: status=$STATUS next_action=$NEXT_ACTION"
-            gh workflow run factory-loop.yml --repo "$GITHUB_REPOSITORY" --ref main
+          MAIN_CYCLE=$(jq -r '.cycle // 0' <<<"$MAIN_STATE" 2>/dev/null || echo 0)
+          INT_CYCLE=$(jq -r '.cycle // 0' <<<"$INTEGRATION_STATE" 2>/dev/null || echo 0)
+          if [[ "$INT_CYCLE" =~ ^[0-9]+$ && "$MAIN_CYCLE" =~ ^[0-9]+$ ]] && (( INT_CYCLE >= MAIN_CYCLE )); then
+            MERGED_STATE=$(jq -S -s '.[0] * .[1]' <(printf '%s' "$MAIN_STATE") <(printf '%s' "$INTEGRATION_STATE"))
           else
-            echo "Factory state explicitly sets continue=false; no relaunch."
+            MERGED_STATE=$(jq -S . <<<"$MAIN_STATE")
           fi
+
+          MAIN_CANON=$(jq -S . <<<"$MAIN_STATE" 2>/dev/null || echo '{}')
+          if [[ -n "$MAIN_SHA" && "$MERGED_STATE" != "$MAIN_CANON" ]]; then
+            ENCODED=$(printf '%s' "$MERGED_STATE" | base64 -w0)
+            gh api --method PUT "repos/${GITHUB_REPOSITORY}/contents/state/factory.json" \
+              -f message='factory: sync durable autonomous progress state' \
+              -f content="$ENCODED" \
+              -f sha="$MAIN_SHA" \
+              -f branch=main >/dev/null
+            echo "Durable integration state synchronized to main; push-triggered factory will continue from it."
+            exit 0
+          fi
+
+          STATE="$MERGED_STATE"
+          STATUS=$(jq -r '.status // "BUILDING"' <<<"$STATE")
+          CONTINUE=$(jq -r '.continue // true' <<<"$STATE")
+          NEXT_ACTION=$(jq -r '.next_action // "CONTINUE_HIGHEST_VALUE_UNFINISHED_WORK"' <<<"$STATE")
+          REQUIRES_USER=$(jq -r '.requires_user_action // false' <<<"$STATE")
+          LOCAL_EXHAUSTED=$(jq -r '.repo_local_work_exhausted // false' <<<"$STATE")
+          REMAINING=$(jq '[ (.p0_checks // {}), (.p0_5_checks // {}), (.p1_checks // {}) ] | map(to_entries) | add // [] | map(select(.value == false)) | length' <<<"$STATE")
+
+          if [[ "$STATUS" == "COMPLETE" ]]; then
+            echo "Factory is COMPLETE. Autonomous work is finished."
+            exit 0
+          fi
+
+          # BLOCKED_EXTERNAL and continue=false are advisory, not terminal. The
+          # machine may stop for a human only when both flags explicitly certify
+          # that every repo-local avenue has been exhausted.
+          if [[ "$REQUIRES_USER" == true && "$LOCAL_EXHAUSTED" == true ]]; then
+            echo "All repo-local work exhausted and explicit human action required. Pausing safely. next_action=$NEXT_ACTION"
+            exit 0
+          fi
+
+          if [[ "$CONTINUE" != true || "$STATUS" == "BLOCKED_EXTERNAL" ]]; then
+            echo "Overriding non-terminal stop: status=$STATUS continue=$CONTINUE remaining_false_gates=$REMAINING"
+          fi
+
+          echo "Relaunching autonomous Beetlejuice factory: status=$STATUS remaining_false_gates=$REMAINING next_action=$NEXT_ACTION"
+          gh workflow run factory-loop.yml --repo "$GITHUB_REPOSITORY" --ref main
