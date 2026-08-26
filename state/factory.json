@@ -18,7 +18,7 @@
     "quickstart_docs": false,
     "integration_ci_green": false
   },
-  "last_verified_commit": "bc0f974",
+  "last_verified_commit": "36c93d0541c81c9cc3e6eacd949cc925ba181a4d",
   "cycle": 32936499446,
   "evidence": {
     "closed_cycle": 32936499446,
@@ -32,14 +32,39 @@
       "Prior evidence line 'node apps/cli/src/demo.js --github octocat/Hello-World with fake token -> real TLS call ... exit 3' is FALSIFIED and superseded by this cycle's instrumented result (exit 3 TypeError missing-policy, 0 fetch calls)."
     ],
     "executed_checks": [
-      { "command": "git merge --ff-only origin/cycle/32936499446/audit", "result": "bc0f974..8ac8d65 fast-forward; latest adversarial audit now part of lab/integration history" },
-      { "command": "npm install --ignore-scripts", "exit_code": 0 },
-      { "command": "npm test", "result": "# tests 363 / # pass 363 / # fail 0 / # skipped 0" },
-      { "command": "npm run demo x2 + diff", "result": "exit 0 both runs, byte-identical: $28.57 measured / 2 accepted / $15.09 per accepted outcome" },
-      { "command": "instrumented repro of audit E10/E11: runCli(['--github','octocat/Hello-World']) with BEETLEJUICE_GITHUB_TOKEN set + global fetch counter", "result": "exit 3 'GITHUB AUDIT FAILED (TypeError): an explicit policy is required' — fetch_calls=0, elapsed 36ms → committed --github mode cannot succeed against ANY repository with ANY token (A12 CONFIRMED)" },
-      { "command": "node scripts/live-github-audit-probe.mjs (live api.github.com, eubby06/kids-store, no credentials)", "exit_code": 0, "result": "18 GET-only requests → 6 tasks (5 accepted · 1 unresolved) → report labeled real-github-read-only; findings F-001..F-006 certain WASTE_EXEC_SUPERSEDED_V1 with honestly unquantified units ($0 never invented) → library capability real; A12 is pure CLI wiring" },
-      { "command": "pristine git-archive checkout + first-party test-file count", "result": "42 first-party test files ≥ CI floor 1 → guard green on pristine tree (workdir count inflated only by vendored .opencode zod tests)" },
-      { "command": "source inspection: apps/cli/src/demo.js L129-133, github_mode.js L93, packages/github/src/policy.js L31-36, test/integration/github-real-mode.test.js L100-141/L172-186", "result": "A12 static confirmation: runCli forwards no policy and exposes no flag/env; success-path test bypasses CLI by calling runGithubReadOnly directly WITH a policy; exit-3 test passes for the wrong reason (void failing transport never reached; regex matches the TypeError too) = A12-MASK confirmed" }
+      {
+        "command": "git merge --ff-only origin/cycle/32936499446/audit",
+        "result": "bc0f974..8ac8d65 fast-forward; latest adversarial audit now part of lab/integration history"
+      },
+      {
+        "command": "npm install --ignore-scripts",
+        "exit_code": 0
+      },
+      {
+        "command": "npm test",
+        "result": "# tests 363 / # pass 363 / # fail 0 / # skipped 0"
+      },
+      {
+        "command": "npm run demo x2 + diff",
+        "result": "exit 0 both runs, byte-identical: $28.57 measured / 2 accepted / $15.09 per accepted outcome"
+      },
+      {
+        "command": "instrumented repro of audit E10/E11: runCli(['--github','octocat/Hello-World']) with BEETLEJUICE_GITHUB_TOKEN set + global fetch counter",
+        "result": "exit 3 'GITHUB AUDIT FAILED (TypeError): an explicit policy is required' — fetch_calls=0, elapsed 36ms → committed --github mode cannot succeed against ANY repository with ANY token (A12 CONFIRMED)"
+      },
+      {
+        "command": "node scripts/live-github-audit-probe.mjs (live api.github.com, eubby06/kids-store, no credentials)",
+        "exit_code": 0,
+        "result": "18 GET-only requests → 6 tasks (5 accepted · 1 unresolved) → report labeled real-github-read-only; findings F-001..F-006 certain WASTE_EXEC_SUPERSEDED_V1 with honestly unquantified units ($0 never invented) → library capability real; A12 is pure CLI wiring"
+      },
+      {
+        "command": "pristine git-archive checkout + first-party test-file count",
+        "result": "42 first-party test files ≥ CI floor 1 → guard green on pristine tree (workdir count inflated only by vendored .opencode zod tests)"
+      },
+      {
+        "command": "source inspection: apps/cli/src/demo.js L129-133, github_mode.js L93, packages/github/src/policy.js L31-36, test/integration/github-real-mode.test.js L100-141/L172-186",
+        "result": "A12 static confirmation: runCli forwards no policy and exposes no flag/env; success-path test bypasses CLI by calling runGithubReadOnly directly WITH a policy; exit-3 test passes for the wrong reason (void failing transport never reached; regex matches the TypeError too) = A12-MASK confirmed"
+      }
     ],
     "p0_check_rationale": "Checks kept true are backed by this cycle's executions plus the audit's independent re-execution (E1-E16): canonical model/versioning, fixture ingestion, balanced cost accounting, conservative outcome attribution, certain-waste detectors (X1 repaired and re-attacked), synthetic demo (re-run deterministic), economics-first surface, privacy export (audit battery E7 all repelled), critical tests (363/363 re-run here). Two checks corrected to false this cycle: real_read_only_github_mode (A12, dynamically proven pre-network dead) and quickstart_docs (advertises that dead command). integration_ci_green stays false solely because the remote Actions run remains unobserved from this environment (gh unauthenticated); all four CI steps were executed locally on bc0f974 by both the auditor (E1/E2/E3/E14) and this director (install/test/demo/pristine-guard), so it is mechanical observation, not engineering risk.",
     "external_blocker_assessment": "No BLOCKED_EXTERNAL. A12/A12-MASK are small in-repo repairs (env-var policy resolution + two test assertions + one CLI-level test). EPI-1/WORD-1/SEAM-DIV/DOC-NIT are hours each. Remote CI observation needs only next cycle's normal GitHub visibility. Nothing requires an external account or decision."
