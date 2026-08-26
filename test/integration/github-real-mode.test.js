@@ -16,13 +16,29 @@
 //   - every request is a GET;
 //   - the report is labeled `real-github-read-only`;
 //   - upstream failure propagates honestly (exit 3 path exercised at CLI level
-//     via a transport that returns 500).
+//     THROUGH the injected transport, asserting the specific adapter error code
+//     and that requests were actually attempted — audit A12-MASK: an ambiguous
+//     stderr regex must never be able to mask a pre-network wiring failure);
+//   - operator classification-policy misconfiguration => exit 2 config errors
+//     (GITHUB_POLICY_ENV_INVALID before any network I/O,
+//     GITHUB_POLICY_MATCHED_NOTHING after a successful but empty sweep).
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-const { runGithubReadOnly, parseOwnerRepo, GITHUB_TOKEN_ENV } = await import("../../apps/cli/src/github_mode.js");
+const { runGithubReadOnly, parseOwnerRepo, GITHUB_TOKEN_ENV, BOT_ACTORS_ENV, BRANCH_PREFIXES_ENV } = await import(
+  "../../apps/cli/src/github_mode.js"
+);
 const { runCli } = await import("../../apps/cli/src/demo.js");
+
+const BEETLEJUICE_ACTORS_KEY = BOT_ACTORS_ENV;
+const BEETLEJUICE_PREFIXES_KEY = BRANCH_PREFIXES_ENV;
+
+/** Restore one process.env key exactly as found (undefined => delete). */
+function restoreEnv(key, previous) {
+  if (previous === undefined) delete process.env[key];
+  else process.env[key] = previous;
+}
 
 const OWNER = "demo-fixture";
 const REPO = "agentic-pipeline";
@@ -80,7 +96,7 @@ function inMemoryGithub({ runConclusion = "success", failAllAfter = null } = {})
     if (/\/commits\/([0-9a-f]+)\/check-runs$/.test(p)) return { status: 200, headers: {}, json: { check_runs: [] } };
     return { status: 404, headers: {}, json: null };
   };
-  return { fetchImpl, methods };
+  return { fetchImpl, methods, callCount: () => calls };
 }
 
 test("parseOwnerRepo enforces the OWNER/REPO shape", () => {
@@ -169,19 +185,120 @@ test("CLI --github without BEETLEJUICE_GITHUB_TOKEN exits 2 with setup guidance"
   }
 });
 
-test("CLI --github propagates upstream failure honestly (exit 3, no fabricated data)", async () => {
+// A12-MASK repair: the upstream-failure case must prove the transport was
+// actually reached (requests attempted > 0) and assert the SPECIFIC adapter
+// error code, so a pre-network wiring failure (e.g. a missing-policy TypeError)
+// can never satisfy this test again. The failing transport is injected through
+// the real CLI entrypoint (runCli deps), not constructed and discarded.
+test("CLI --github propagates upstream failure honestly (exit 3, transport actually exercised)", async () => {
   const previous = process.env[GITHUB_TOKEN_ENV];
   process.env[GITHUB_TOKEN_ENV] = "simulated-token-not-a-secret";
+  const previousActors = process.env.BEETLEJUICE_BOT_ACTORS;
+  const previousPrefixes = process.env.BEETLEJUICE_BRANCH_PREFIXES;
+  process.env.BEETLEJUICE_BOT_ACTORS = BOT;
+  process.env.BEETLEJUICE_BRANCH_PREFIXES = PREFIX;
   const failing = inMemoryGithub({ failAllAfter: 0 }); // transport returns 500 for everything
   try {
     const { code, stderr } = await captureStdoutAndErr(() =>
-      runCli(["--github", `${OWNER}/${REPO}`, "--out", ""])
+      runCli(["--github", `${OWNER}/${REPO}`, "--out", ""], { fetchImpl: failing.fetchImpl })
     );
     assert.equal(code, 3, "upstream failure must exit non-zero rather than fake success");
-    assert.match(stderr, /GITHUB AUDIT FAILED|UPSTREAM_ERROR|NETWORK_ERROR_REDACTED|error:/);
+    // Specific adapter taxonomy code — not an ambiguous catch-all regex.
+    assert.match(stderr, /UPSTREAM_ERROR|NETWORK_ERROR_REDACTED/);
+    // The wiring must never masquerade as an upstream failure.
+    assert.doesNotMatch(stderr, /policy/i);
+    // Proof the pipeline genuinely issued network work before failing.
+    assert.ok(failing.callCount() > 0, "the injected transport was never exercised");
   } finally {
     if (previous !== undefined) process.env[GITHUB_TOKEN_ENV] = previous;
     else delete process.env[GITHUB_TOKEN_ENV];
-    void failing;
+    restoreEnv(BEETLEJUICE_ACTORS_KEY, previousActors);
+    restoreEnv(BEETLEJUICE_PREFIXES_KEY, previousPrefixes);
+  }
+});
+
+// A12 (P0 #7): the COMMITTED command path — `runCli(["--github", ...])` with no
+// explicit policy object — must succeed end-to-end by resolving the operator
+// classification policy from the environment (BEETLEJUICE_BOT_ACTORS /
+// BEETLEJUICE_BRANCH_PREFIXES). This is the exact invocation that died
+// pre-network with `an explicit policy is required` before the A12 repair.
+test("CLI --github resolves the operator policy from env vars and succeeds through runCli", async () => {
+  const previous = process.env[GITHUB_TOKEN_ENV];
+  const previousActors = process.env[BEETLEJUICE_ACTORS_KEY];
+  const previousPrefixes = process.env[BEETLEJUICE_PREFIXES_KEY];
+  process.env[GITHUB_TOKEN_ENV] = "simulated-token-not-a-secret";
+  process.env[BEETLEJUICE_ACTORS_KEY] = BOT; // measured-agentic actor
+  process.env[BEETLEJUICE_PREFIXES_KEY] = PREFIX; // inferred-agentic prefix
+  const gh = inMemoryGithub();
+  try {
+    const { code, stdout } = await captureStdoutAndErr(() =>
+      runCli(["--github", `${OWNER}/${REPO}`, "--format", "json"], { fetchImpl: gh.fetchImpl })
+    );
+    assert.equal(code, 0, "the committed --github command must produce an audit");
+    assert.ok(gh.methods.length > 0);
+    assert.ok(gh.methods.every((m) => m === "GET"), "CLI-driven real mode stays GET-only");
+
+    const report = JSON.parse(stdout);
+    assert.equal(report.mode, "real-github-read-only");
+    assert.equal(report.headline.successful_outcomes, 1);
+    // The effective policy is disclosed in the report: which PRs counted as
+    // agentic, under which confidence dimension, from which source.
+    assert.ok(report.classification_policy, "real-mode reports disclose the classification policy");
+    assert.deepEqual(report.classification_policy.bot_actors, [BOT]);
+    assert.deepEqual(report.classification_policy.branch_prefixes, [PREFIX]);
+    assert.equal(report.classification_policy.bot_actors_source, "operator-env");
+    assert.equal(report.classification_policy.branch_prefixes_source, "operator-env");
+  } finally {
+    if (previous !== undefined) process.env[GITHUB_TOKEN_ENV] = previous;
+    else delete process.env[GITHUB_TOKEN_ENV];
+    restoreEnv(BEETLEJUICE_ACTORS_KEY, previousActors);
+    restoreEnv(BEETLEJUICE_PREFIXES_KEY, previousPrefixes);
+  }
+});
+
+test("malformed policy env var is an exit-2 config error BEFORE any network I/O", async () => {
+  const previous = process.env[GITHUB_TOKEN_ENV];
+  const previousActors = process.env[BEETLEJUICE_ACTORS_KEY];
+  process.env[GITHUB_TOKEN_ENV] = "simulated-token-not-a-secret";
+  process.env[BEETLEJUICE_ACTORS_KEY] = "two words"; // whitespace inside one entry => fail fast
+  const gh = inMemoryGithub();
+  try {
+    const { code, stderr } = await captureStdoutAndErr(() =>
+      runCli(["--github", `${OWNER}/${REPO}`], { fetchImpl: gh.fetchImpl })
+    );
+    assert.equal(code, 2, "operator misconfiguration is a setup problem, not an upstream failure");
+    assert.match(stderr, /GITHUB_POLICY_ENV_INVALID/);
+    assert.match(stderr, new RegExp(BEETLEJUICE_ACTORS_KEY));
+    assert.equal(gh.callCount(), 0, "config validation must happen before any request");
+  } finally {
+    if (previous !== undefined) process.env[GITHUB_TOKEN_ENV] = previous;
+    else delete process.env[GITHUB_TOKEN_ENV];
+    restoreEnv(BEETLEJUICE_ACTORS_KEY, previousActors);
+  }
+});
+
+test("a policy that matches zero PRs refuses with guidance after a successful sweep", async () => {
+  const previous = process.env[GITHUB_TOKEN_ENV];
+  const previousActors = process.env[BEETLEJUICE_ACTORS_KEY];
+  const previousPrefixes = process.env[BEETLEJUICE_PREFIXES_KEY];
+  process.env[GITHUB_TOKEN_ENV] = "simulated-token-not-a-secret";
+  // Explicitly emptied dimensions: nothing can match, so the audit must refuse
+  // instead of rendering an empty report as if it were evidence.
+  process.env[BEETLEJUICE_ACTORS_KEY] = "-";
+  process.env[BEETLEJUICE_PREFIXES_KEY] = "-";
+  const gh = inMemoryGithub();
+  try {
+    const { code, stderr } = await captureStdoutAndErr(() =>
+      runCli(["--github", `${OWNER}/${REPO}`], { fetchImpl: gh.fetchImpl })
+    );
+    assert.equal(code, 2);
+    assert.match(stderr, /GITHUB_POLICY_MATCHED_NOTHING/);
+    assert.match(stderr, /matched 0 of 1 pull request/i);
+    assert.ok(gh.callCount() > 0, "the refusal comes AFTER proving the sweep succeeded");
+  } finally {
+    if (previous !== undefined) process.env[GITHUB_TOKEN_ENV] = previous;
+    else delete process.env[GITHUB_TOKEN_ENV];
+    restoreEnv(BEETLEJUICE_ACTORS_KEY, previousActors);
+    restoreEnv(BEETLEJUICE_PREFIXES_KEY, previousPrefixes);
   }
 });

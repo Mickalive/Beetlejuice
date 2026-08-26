@@ -162,8 +162,15 @@ test("R2 guard: a retry that itself SUCCEEDED is never certain waste (audit defe
   assert.equal(r.guards_abstained.retry_without_recorded_failure, 1);
 });
 
-test("R2 guard still flags retries whose own outcome is a recorded failure", () => {
-  const bundle = minimalBundleWithTask("T-R2OK", [
+// EPI-1/RT-2 regression (aligned with packages/core guard G4): a post-premise
+// retry whose OWN failure mode disagrees (flaky/transient/unknown) used to be
+// charged anyway. Its own recorded mode is observable disproof of "identical
+// inputs fail identically" under this work signature — the same epistemics that
+// poisons dup-CI partitions (X1/G5) and core retry groups (G4). The prior
+// expectation here encoded the defective behavior and was corrected in the
+// same commit, mirroring the established X1 correction pattern.
+test("EPI-1: a post-premise retry whose failure MODE disagrees poisons the pair", () => {
+  const bundle = minimalBundleWithTask("T-EPI1", [
     exec("e-01", "2026-08-10T09:00:00Z", {
       work_signature: "sig-K1",
       failure_category: "deterministic",
@@ -175,15 +182,33 @@ test("R2 guard still flags retries whose own outcome is a recorded failure", () 
     }),
   ]);
   const r = detectCertainWaste(validateNormalizedBundle(bundle).records);
-  assert.deepEqual(r.findings.map((f) => f.finding_key), [
-    "T-R2OK/IDENTICAL_RETRY_AFTER_DETERMINISTIC_FAILURE/e-02",
+  assert.deepEqual(r.findings.map((f) => f.finding_key), []);
+  assert.equal(r.guards_abstained.retry_mode_disagreement, 1);
+  assert.equal(r.guards_abstained.retry_without_recorded_failure, 0);
+});
+
+test("EPI-1 positive twin: a same-mode deterministic retry stays certainly chargeable", () => {
+  const bundle = minimalBundleWithTask("T-EPI1OK", [
+    exec("e-01", "2026-08-10T09:00:00Z", {
+      work_signature: "sig-K1",
+      failure_category: "deterministic",
+    }),
+    exec("e-02", "2026-08-10T10:00:00Z", {
+      work_signature: "sig-K1",
+      retry_of_execution_id: "e-01",
+      failure_category: "deterministic",
+    }),
   ]);
-  assert.equal(r.findings[0].rule_version, "1.1.0");
+  const r = detectCertainWaste(validateNormalizedBundle(bundle).records);
+  assert.deepEqual(r.findings.map((f) => f.finding_key), [
+    "T-EPI1OK/IDENTICAL_RETRY_AFTER_DETERMINISTIC_FAILURE/e-02",
+  ]);
+  assert.equal(r.findings[0].rule_version, "1.2.0");
   const retryEvidence = r.findings[0].evidence.find(
     (e) => e.kind === "identical_retry_of_deterministic_failure"
   );
-  assert.equal(retryEvidence.retry_failure_category, "flaky");
-  assert.equal(r.guards_abstained.retry_without_recorded_failure, 0);
+  assert.equal(retryEvidence.retry_failure_category, "deterministic");
+  assert.equal(r.guards_abstained.retry_mode_disagreement, 0);
 });
 
 test("R2 chain: later retries of a successful attempt are not flagged", () => {

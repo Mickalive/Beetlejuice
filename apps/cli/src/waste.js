@@ -21,7 +21,11 @@ export const WASTE_RULE_ORDER = Object.freeze([
 
 export const RULE_VERSIONS = Object.freeze({
   SUPERSEDED_EXECUTION: "1.1.0",
-  IDENTICAL_RETRY_AFTER_DETERMINISTIC_FAILURE: "1.1.0",
+  // 1.2.0 (audit EPI-1/RT-2 alignment with core G4): a post-premise retry whose
+  // OWN recorded failure mode disagrees with the established deterministic class
+  // is observable disproof of "identical inputs fail identically" — the group
+  // abstains instead of charging.
+  IDENTICAL_RETRY_AFTER_DETERMINISTIC_FAILURE: "1.2.0",
   EXECUTION_AFTER_TASK_ABORT: "1.0.1", // 1.0.1: explanation no longer claims completion without ended_at (audit WORD-1)
 });
 
@@ -43,6 +47,7 @@ export const CANONICAL_RULE_CLASSES = Object.freeze({
 function newGuardStats() {
   return {
     retry_without_recorded_failure: 0,
+    retry_mode_disagreement: 0,
     replacement_not_started_strictly_later: 0,
   };
 }
@@ -124,6 +129,10 @@ function findSupersededExecutionWaste(record, guards) {
  * (R2 guard, audit defect D2) a retry that does NOT itself carry a recorded
  * failure outcome emits nothing — a retry that succeeded demonstrably
  * contributed to the task path, so calling it "certain waste" is falsifiable.
+ * (G4 alignment, audit EPI-1/RT-2): a retry whose own recorded failure mode is
+ * NOT deterministic emits nothing either — observed mode-variance on supposedly
+ * identical inputs disqualifies the certainty premise (same epistemics as
+ * packages/core WASTE_DET_RETRY_V1 guard G4 / WASTE_DUP_CI_V1 guard G5).
  */
 function findIdenticalRetryWaste(record, guards) {
   const findings = [];
@@ -141,6 +150,16 @@ function findIdenticalRetryWaste(record, guards) {
       // R2: no recorded failure on the retry itself => observed success or unknown
       // outcome. Either way the certainty premise is broken: abstain.
       guards.retry_without_recorded_failure += 1;
+      continue;
+    }
+    if (execution.failure_category !== "deterministic") {
+      // G4 alignment (audit EPI-1/RT-2, mirrors packages/core WASTE_DET_RETRY_V1
+      // guard G4): the retry's own recorded failure mode (transient/flaky/unknown)
+      // is direct observable evidence that identical inputs do NOT reproduce
+      // identically under this work signature — either the signature is
+      // untrustworthy or the deterministic premise is wrong. Under either reading
+      // "could not succeed" is indefensible for this retry: abstain.
+      guards.retry_mode_disagreement += 1;
       continue;
     }
     findings.push(

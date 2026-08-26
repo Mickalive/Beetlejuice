@@ -138,11 +138,15 @@ vocabularies:
    Requires a strictly-later replacement start (repair R4 of audit defect D4);
    contradictory/equal timing abstains and is counted in
    `waste_detection_meta.guards_abstained.replacement_not_started_strictly_later`.
-2. `IDENTICAL_RETRY_AFTER_DETERMINISTIC_FAILURE` v1.1.0 → class `WASTE_DET_RETRY_V1`.
+2. `IDENTICAL_RETRY_AFTER_DETERMINISTIC_FAILURE` v1.2.0 → class `WASTE_DET_RETRY_V1`.
    Requires an identical `work_signature`, a deterministic prior failure AND a
    recorded failure on the retry itself. A retry that succeeded is NEVER waste
    (repair R2 of audit defect D2); abstentions counted as
-   `retry_without_recorded_failure`.
+   `retry_without_recorded_failure`. A retry whose own recorded failure mode is
+   not itself `deterministic` is also NEVER charged (v1.2.0 repair EPI-1/RT-2,
+   mirroring packages/core guard G4): observed mode-variance on supposedly
+   identical inputs disqualifies the certainty premise; abstentions counted as
+   `retry_mode_disagreement`.
 3. `EXECUTION_AFTER_TASK_ABORT` v1.0.1 → class `null` (product-surface extension;
    no core equivalent yet). Executions starting strictly after `aborted_at`.
    The explanation claims "ran to completion" only when the execution recorded

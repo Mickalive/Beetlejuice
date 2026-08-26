@@ -31,9 +31,23 @@ export BEETLEJUICE_GITHUB_TOKEN=github_pat_...   # fine-grained PAT or App token
 npm run demo -- --github OWNER/REPO
 ```
 
+PRs count as agentic only when matched by an explicit classification policy
+(the adapter refuses to guess which pull requests are agentic):
+
+```bash
+export BEETLEJUICE_BOT_ACTORS=my-agent-bot[bot],other-agent[bot]   # bot logins -> measured-agentic
+export BEETLEJUICE_BRANCH_PREFIXES=beetlejuice/,myagent-           # branch prefixes -> inferred-agentic
+```
+
+Unset variables fall back to a documented conservative default (well-known
+coding-agent bot identities plus tool-owned branch prefixes); `-` disables a
+dimension explicitly; malformed values fail fast before any network I/O. The
+effective policy and its provenance are disclosed in every report.
+
 Behavior you can rely on:
 
 - without a token the command refuses with setup guidance instead of fabricating an audit;
+- a policy matching zero PRs refuses with actionable guidance (exit 2) instead of rendering an empty report;
 - CI/model/tool costs are reported as *unavailable* unless you supply operator billing evidence — nothing is guessed;
 - upstream/network failures exit non-zero with the adapter's redacted error;
 - reports are labeled `real-github-read-only`, clearly distinct from the `synthetic demo`.

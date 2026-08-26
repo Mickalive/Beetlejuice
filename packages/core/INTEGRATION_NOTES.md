@@ -46,6 +46,14 @@ short-circuited by G6.
 
 ## Integration needs (not core-owned)
 
+> **Integration status (cycle 32941279561):** all three items below are CLOSED
+> on `lab/integration`. The product layer aligned with EPI-1
+> (`IDENTICAL_RETRY_AFTER_DETERMINISTIC_FAILURE` v1.2.0, guard counter
+> `retry_mode_disagreement`); WORD-1/SEAM-DIV/DOC-NIT landed via the product
+> and github lanes; A12 is repaired at the CLI surface (env-resolved operator
+> classification policy + report disclosure) and A12-MASK was replaced by
+> transport-exercised CLI-level tests. Kept for provenance:
+
 - Product lane mirror of EPI-1: `apps/cli/src/waste.js`
   (`IDENTICAL_RETRY_AFTER_DETERMINISTIC_FAILURE`, legacy normalized-input path)
   charges post-premise retries regardless of the retry's own recorded failure
