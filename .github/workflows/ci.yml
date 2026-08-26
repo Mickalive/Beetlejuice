@@ -1,0 +1,31 @@
+name: BEETLEJUICE Product CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - lab/integration
+
+permissions:
+  contents: read
+
+concurrency:
+  group: beetlejuice-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  product:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - name: Install workspace
+        run: npm install --ignore-scripts
+      - name: Unit and integration tests
+        run: npm test
+      - name: Synthetic product audit
+        run: npm run demo
