@@ -194,11 +194,21 @@ jobs:
           NEXT_ACTION=$(jq -r '.next_action // "CONTINUE_HIGHEST_VALUE_UNFINISHED_WORK"' <<<"$STATE")
           REQUIRES_USER=$(jq -r '.requires_user_action // false' <<<"$STATE")
           LOCAL_EXHAUSTED=$(jq -r '.repo_local_work_exhausted // false' <<<"$STATE")
-          REMAINING=$(jq '[ (.p0_checks // {}), (.p0_5_checks // {}), (.p1_checks // {}) ] | map(to_entries) | add // [] | map(select(.value == false)) | length' <<<"$STATE")
+          TERMINAL_READY=$(jq -r '.terminal_ready // false' <<<"$STATE")
+          CHECK_GROUPS=$(jq '[to_entries[] | select(.key | endswith("_checks")) | select(.value | type == "object")] | length' <<<"$STATE")
+          REMAINING=$(jq '[to_entries[] | select(.key | endswith("_checks")) | select(.value | type == "object") | .value | to_entries[] | select(.value == false)] | length' <<<"$STATE")
 
-          if [[ "$STATUS" == "COMPLETE" ]]; then
-            echo "Factory is COMPLETE. Autonomous work is finished."
+          # COMPLETE is not trusted merely because an LLM wrote it. It becomes a
+          # terminal state only when all declared machine-checkable gates are green
+          # and the roadmap explicitly certifies terminal readiness.
+          if [[ "$STATUS" == "COMPLETE" && "$REMAINING" -eq 0 && "$CHECK_GROUPS" -gt 0 && "$TERMINAL_READY" == true ]]; then
+            echo "Factory terminal predicate satisfied: COMPLETE, all gates green, terminal_ready=true."
             exit 0
+          fi
+          if [[ "$STATUS" == "COMPLETE" ]]; then
+            echo "::warning::Rejecting premature COMPLETE: check_groups=$CHECK_GROUPS remaining_false_gates=$REMAINING terminal_ready=$TERMINAL_READY"
+            STATUS="BUILDING"
+            CONTINUE=true
           fi
 
           # BLOCKED_EXTERNAL and continue=false are advisory, not terminal. The
@@ -213,5 +223,5 @@ jobs:
             echo "Overriding non-terminal stop: status=$STATUS continue=$CONTINUE remaining_false_gates=$REMAINING"
           fi
 
-          echo "Relaunching autonomous Beetlejuice factory: status=$STATUS remaining_false_gates=$REMAINING next_action=$NEXT_ACTION"
+          echo "Relaunching autonomous Beetlejuice factory: status=$STATUS check_groups=$CHECK_GROUPS remaining_false_gates=$REMAINING next_action=$NEXT_ACTION"
           gh workflow run factory-loop.yml --repo "$GITHUB_REPOSITORY" --ref main
