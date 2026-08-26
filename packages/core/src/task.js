@@ -327,6 +327,12 @@ function finalizeTask(t) {
     taskRef: t.taskRef,
     startedSeq: s.startedSeq,
     lastSeq: s.lastSeq,
+    // Position of the LAST observed task_aborted signal in the ledger total
+    // order, or null when the task was never aborted OR the abort position is
+    // unobservable (e.g. reconstruction over unstamped events). Exposed so
+    // certain-waste rules can prove "this work started after the objective
+    // disappeared" without re-deriving reconstruction state.
+    abortedSeq: Number.isInteger(s.abortedSignal?.seq) ? s.abortedSignal.seq : null,
     lastTime: s.lastTime,
     eventCount: s.eventCount,
     adapters: [...s.sources].sort(),

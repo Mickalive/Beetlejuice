@@ -10,6 +10,43 @@
 
 export const COST_KINDS = Object.freeze(['inference', 'tools', 'ci', 'compute', 'validation', 'human']);
 
+/**
+ * Canonical cost-evidence states (audit LIVE-REPORT-ZERO-DOLLARS repair,
+ * producer side). A headline that renders `$0.00` when no cost evidence was
+ * ever supplied is technically honest but economically misleading; surfaces
+ * should key off this state instead of re-deriving the distinction:
+ *
+ * - `measured`      — known spend > 0: render the amount.
+ * - `measured_zero` — every observed component carried a SUPPLIED cost and
+ *                     they sum to exactly zero: `$0.00` is genuinely measured.
+ * - `unmeasured`    — representable spend is 0 AND unavailable components
+ *                     exist: the total is NOT knowable from this evidence;
+ *                     render "no measurable cost evidence supplied" instead
+ *                     of `$0.00`.
+ * - `none_observed` — zero cost-bearing components in the audit window.
+ */
+export const COST_EVIDENCE_STATES = Object.freeze(['measured', 'measured_zero', 'unmeasured', 'none_observed']);
+
+/**
+ * Derive the canonical evidence state from a rollup (or any object carrying
+ * `knownMicroUsd`, `unknownComponentCount`, `totalComponents`).
+ */
+export function costEvidenceState({ knownMicroUsd, unknownComponentCount, totalComponents }) {
+  for (const [field, value] of [
+    ['knownMicroUsd', knownMicroUsd],
+    ['unknownComponentCount', unknownComponentCount],
+    ['totalComponents', totalComponents],
+  ]) {
+    if (!Number.isInteger(value) || value < 0) {
+      throw new TypeError(`costEvidenceState requires non-negative integer ${field}`);
+    }
+  }
+  if (totalComponents === 0) return 'none_observed';
+  if (knownMicroUsd > 0) return 'measured';
+  if (unknownComponentCount > 0) return 'unmeasured';
+  return 'measured_zero';
+}
+
 export function emptyRollup() {
   return {
     currency: 'USD',
