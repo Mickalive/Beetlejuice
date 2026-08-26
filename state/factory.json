@@ -2,7 +2,7 @@
   "schema_version": "1",
   "status": "BUILDING",
   "continue": true,
-  "next_action": "FIX_A12_CLI_POLICY_WIRING (highest-value P0 gap; blocks p0_checks.real_read_only_github_mode): the committed `--github OWNER/REPO` mode can never reach the network because runCli never supplies the adapter-mandatory classification policy — verified this cycle (exit 3 TypeError 'an explicit policy is required', fetch_calls=0 in 36ms, any valid token). Smallest repair per reports/latest-product-audit.md §8/A12: resolve an operator policy inside apps/cli/src/github_mode.js/demo.js from BEETLEJUICE_BOT_ACTORS / BEETLEJUICE_BRANCH_PREFIXES env vars (comma-separated), falling back to a documented conservative default built from packages/github exported SUGGESTED_AGENTIC_ACTORS + common agent branch prefixes; keep existing explicit override. Then: (a) fix A12-MASK in test/integration/github-real-mode.test.js L172-186 — assert specific UPSTREAM_ERROR/NETWORK_ERROR_REDACTED code and collection.requests.length>0 so a wiring TypeError can never mask again; (b) add a CLI-driven success-path test THROUGH runCli([\"--github\",...]) using the injected transport; (c) re-run scripts/live-github-audit-probe.mjs path through the actual CLI command and record evidence; (d) correct the falsified factory evidence line. Secondary same-cycle items if capacity remains (audit §10 order): EPI-1 docstring/guard asymmetry, WORD-1 ended_at phrasing, SEAM-DIV paragraph in NORMALIZED_INPUT.md, DOC-NIT import snippet. Then confirm remote Actions run on lab/integration to flip integration_ci_green; only after BOTH #7 and #12 flip may status become P0_READY.",
+  "next_action": "OBSERVE_REMOTE_CI_ON_LAB_INTEGRATION (sole remaining P0 item, #12): the pushed head 25bb22c passed every CI step locally (install, first-party guard 59>=20, npm test 397/397, demo deterministic), but zero Actions runs exist for branch lab/integration (public API total_count=0) and GitHub structurally cannot start one from inside this environment: pushes made with the repository App token never trigger workflows, and a workflow-file push was remote-rejected ('refusing to allow a GitHub App to create or update workflow .github/workflows/ci.yml without workflows permission' — preserved in reports/ci-guard-proposal.md). Smallest resolution next cycle, in order: (a) from the supervisor's workflows-capable main-side context, trigger or observe 'BEETLEJUICE Product CI' on lab/integration @ 25bb22c (or re-push lab/integration with a USER/App token that is allowed to create workflow runs), then read the run conclusion via the public checks API; (b) alternatively grant the factory App the `workflows` permission so the pending ci.yml hardening commit can land and future pushes self-verify. If the run is green on 25bb22c (or any strict descendant containing it), flip integration_ci_green and set status P0_READY — every other criterion is already flipped on executed evidence this cycle. No product engineering work remains open for P0.",
   "blocking_reason": null,
   "p0_checks": {
     "canonical_agentic_task": true,
@@ -11,62 +11,79 @@
     "outcome_attribution": true,
     "certain_waste_detector": true,
     "synthetic_demo": true,
-    "real_read_only_github_mode": false,
+    "real_read_only_github_mode": true,
     "economic_product_surface": true,
     "privacy_safe_global_export": true,
     "critical_tests": true,
-    "quickstart_docs": false,
+    "quickstart_docs": true,
     "integration_ci_green": false
   },
-  "last_verified_commit": "36c93d0541c81c9cc3e6eacd949cc925ba181a4d",
-  "cycle": 32936499446,
+  "last_verified_commit": "25bb22c1f2dd2c792fdd8bf6f79fc593bf91571e",
+  "cycle": 32941279561,
   "evidence": {
-    "closed_cycle": 32936499446,
-    "verified_at_utc": "2026-08-26T09:05:00Z",
-    "verified_by": "product_director",
-    "audited_candidate": "origin/lab/integration @ bc0f974 (audit lane origin/cycle/32936499446/audit @ 8ac8d65 fast-forwarded onto lab/integration as acceptance of auditor output)",
-    "audit_verdict_accepted": "REJECT as P0_READY — 10/12 PASS, #7 FAIL on A12, #12 conditional (remote run unobserved). Director re-verified every decisive claim by execution before accepting; see executed_checks.",
+    "closed_cycle": 32941279561,
+    "verified_at_utc": "2026-08-26T10:30:00Z",
+    "verified_by": "integration_director",
+    "integrated_candidate": "lab/integration @ 25bb22c1f2dd2c792fdd8bf6f79fc593bf91571e, pushed to origin (git ls-remote confirms refs/heads/lab/integration = 25bb22c)",
+    "lane_merges": [
+      "db927f7 core lane 47723b2: EPI-1 guard G4 (retry mode-consistency poisons group) + TRUST-1 guard G6 (null-revision dup-CI partitions abstain), 90 core tests",
+      "d73e1ca github lane da1fba3: resolveAgenticPolicyFromEnv (A12 adapter building block: env override / explicit empty opt-out / documented defaults), SEAM-DIV bundle docstring, policy-env.test.js",
+      "eb9a833 privacy lane 6d37c02: seeded deterministic Laplace DP for published aggregate cohorts, per-purpose epsilon ceilings (5/2/1, ABSOLUTE_MAXIMUM_EPSILON=5), versioned pipeline step, differential-privacy.test.mjs (302 lines)",
+      "05d6899 product lane 402b00c: A12 CLI wiring (resolveOperatorPolicy/parseOperatorList, BEETLEJUICE_BOT_ACTORS/_BRANCH_PREFIXES, exit-2 GITHUB_POLICY_ENV_INVALID / GITHUB_POLICY_MATCHED_NOTHING, classification-policy disclosure in report+markdown), WORD-1 abort-rule wording v1.0.1, SEAM-DIV + DOC-NIT docs"
+    ],
+    "integration_repairs_commit": "25bb22c Factory 32941279561: integration repairs (RT-2/EPI-1 product-rule alignment, A12-MASK test fix, CLI-driven real-mode success tests, quickstart policy docs)",
     "corrections_to_prior_state": [
-      "p0_checks.real_read_only_github_mode flipped true->false: prior cycle's claim rested on an invocation that actually failed PRE-NETWORK with the missing-policy TypeError, not an upstream TLS failure. Instrumented rerun this cycle: fetch_calls=0. The library capability is real (live probe exit 0), but the committed product surface is unrunnable — criterion demands the product surface.",
-      "p0_checks.quickstart_docs downgraded true->false: README's real-mode quickstart documents exactly the broken A12 command (audit §3 item 11); docs currently advertise an unrunnable command until A12 lands and is re-documented.",
-      "Prior evidence line 'node apps/cli/src/demo.js --github octocat/Hello-World with fake token -> real TLS call ... exit 3' is FALSIFIED and superseded by this cycle's instrumented result (exit 3 TypeError missing-policy, 0 fetch calls)."
+      "p0_checks.real_read_only_github_mode flipped false->true: A12 repaired at the committed surface. Evidence below (CLI-driven success test, live instrumented probe fetch_calls=1).",
+      "p0_checks.quickstart_docs flipped false->true: root README real-mode section now documents token + BEETLEJUICE_BOT_ACTORS/_BRANCH_PREFIXES (+ '-' opt-out, fail-fast malformed values, report disclosure) and the advertised command demonstrably runs; local quickstart re-executed.",
+      "Prior cycle's instrumented result (exit 3 missing-policy TypeError, fetch_calls=0) is superseded: identical probe now exits via typed adapter UPSTREAM_ERROR after real network I/O."
     ],
     "executed_checks": [
       {
-        "command": "git merge --ff-only origin/cycle/32936499446/audit",
-        "result": "bc0f974..8ac8d65 fast-forward; latest adversarial audit now part of lab/integration history"
+        "command": "git merge --no-ff of 47723b2/da1fba3/6d37c02/402b00c into lab/integration",
+        "result": "four clean merges, zero file conflicts (lanes touch disjoint paths)"
       },
       {
-        "command": "npm install --ignore-scripts",
-        "exit_code": 0
+        "command": "npm install --ignore-scripts && npm test",
+        "result": "# tests 397 / # pass 397 / # fail 0 / # skipped 0 (363 prior + 34 lane/repair tests)"
       },
       {
-        "command": "npm test",
-        "result": "# tests 363 / # pass 363 / # fail 0 / # skipped 0"
+        "command": "node --test test/integration/github-real-mode.test.js (8 tests)",
+        "result": "all pass incl.: CLI success path THROUGH runCli(['--github',...]) with injected transport + env-resolved policy (report.mode=real-github-read-only, successful_outcomes=1, classification_policy disclosed with operator-env sources); upstream-500 case asserts specific UPSTREAM_ERROR|NETWORK_ERROR_REDACTED, stderr free of 'policy', and transport callCount>0 (A12-MASK closed); malformed BEETLEJUICE_BOT_ACTORS -> exit 2 GITHUB_POLICY_ENV_INVALID with 0 requests (pre-network); emptied policy -> exit 2 GITHUB_POLICY_MATCHED_NOTHING 'matched 0 of 1 pull request(s)' AFTER successful sweep"
       },
       {
-        "command": "npm run demo x2 + diff",
-        "result": "exit 0 both runs, byte-identical: $28.57 measured / 2 accepted / $15.09 per accepted outcome"
+        "command": "instrumented rerun of audit E10/E11: global fetch counter + runCli(['--github','octocat/Hello-World']) with simulated invalid credential, default policy resolution",
+        "result": "exit=3 fetch_calls=1 elapsed_ms=74 — 'GITHUB AUDIT FAILED (GithubAdapterError UPSTREAM_ERROR): upstream 401 for GET /repos/octocat/Hello-World/pulls'. The committed --github command now performs REAL network I/O against api.github.com and fails honestly on bad credentials (was: pre-network TypeError, fetch_calls=0, 36ms). Combined with prior cycle's live library-level audit success (E12, 18 GETs, balanced ledger), P0 #7 is met by the product surface."
       },
       {
-        "command": "instrumented repro of audit E10/E11: runCli(['--github','octocat/Hello-World']) with BEETLEJUICE_GITHUB_TOKEN set + global fetch counter",
-        "result": "exit 3 'GITHUB AUDIT FAILED (TypeError): an explicit policy is required' — fetch_calls=0, elapsed 36ms → committed --github mode cannot succeed against ANY repository with ANY token (A12 CONFIRMED)"
+        "command": "npm run demo x2 + diff (on HEAD 25bb22c)",
+        "result": "exit 0 both, byte-identical; economics unchanged vs pre-merge base: $28.57 measured / 2 accepted / $15.09 per accepted outcome"
       },
       {
-        "command": "node scripts/live-github-audit-probe.mjs (live api.github.com, eubby06/kids-store, no credentials)",
-        "exit_code": 0,
-        "result": "18 GET-only requests → 6 tasks (5 accepted · 1 unresolved) → report labeled real-github-read-only; findings F-001..F-006 certain WASTE_EXEC_SUPERSEDED_V1 with honestly unquantified units ($0 never invented) → library capability real; A12 is pure CLI wiring"
+        "command": "runtime DP probe (exportGlobalLearningRecords, aggregateOnly+differentialPrivacy+dpSeed, GLOBAL_BENCHMARK_CONTRIBUTION)",
+        "result": "aggregate_mode=differential_private, mechanism {laplace, epsilon 2, sensitivity 1} disclosed WITHOUT seed (seed_leak=false), rare cohort suppressed (counts.suppressed=1), cohorts clamped integers with exact_size_exposed=false, versioned trace includes differential-privacy step"
       },
       {
-        "command": "pristine git-archive checkout + first-party test-file count",
-        "result": "42 first-party test files ≥ CI floor 1 → guard green on pristine tree (workdir count inflated only by vendored .opencode zod tests)"
+        "command": "node apps/cli/src/demo.js --input apps/cli/fixtures/synthetic-audit-v2.json; node apps/cli/src/demo.js --github acme/widget (no token)",
+        "result": "input seam exit 0 ($28.57 verbatim); no-token refusal exit 2 [GITHUB_TOKEN_MISSING] with setup guidance"
       },
       {
-        "command": "source inspection: apps/cli/src/demo.js L129-133, github_mode.js L93, packages/github/src/policy.js L31-36, test/integration/github-real-mode.test.js L100-141/L172-186",
-        "result": "A12 static confirmation: runCli forwards no policy and exposes no flag/env; success-path test bypasses CLI by calling runGithubReadOnly directly WITH a policy; exit-3 test passes for the wrong reason (void failing transport never reached; regex matches the TypeError too) = A12-MASK confirmed"
+        "command": "pristine git-archive checkout of HEAD + both guard find expressions",
+        "result": "old guard 59 >= 1 green; new first-party guard (reports/ci-guard-proposal.md) 59 >= 20 green"
+      },
+      {
+        "command": "RT-2/EPI-1 alignment: apps/cli IDENTICAL_RETRY_AFTER_DETERMINISTIC_FAILURE v1.1.0 -> v1.2.0 (post-premise retry with non-deterministic own failure mode now abstains via new guard counter retry_mode_disagreement; committed flaky-retry expectation corrected per established X1 pattern + positive twin added)",
+        "result": "waste suite 14/14; demo economics byte-identical (fixture retry chain T-003 is same-class); product rule now matches core G4 semantics end-to-end"
+      },
+      {
+        "command": "attempted landing of reports/ci-guard-proposal.md ci.yml hardening + push",
+        "result": "edit verified locally then remote-rejected: 'refusing to allow a GitHub App to create or update workflow .github/workflows/ci.yml without workflows permission'; commit dropped locally (reset to 25bb22c), proposal stays pending maintainer/App-permission action"
+      },
+      {
+        "command": "git push origin lab/integration; git ls-remote; public Actions API queries (branch filter + all-runs + check-runs for 25bb22c)",
+        "result": "push succeeded (5e3b938..25bb22c); runs for lab/integration: total_count=0 ever; check_runs for 25bb22c: 0 — GITHUB_TOKEN-triggered pushes do not start workflow runs, so remote CI observation is structurally impossible from this environment (integration_ci_green stays false on honest bookkeeping; all four CI steps verified locally instead)"
       }
     ],
-    "p0_check_rationale": "Checks kept true are backed by this cycle's executions plus the audit's independent re-execution (E1-E16): canonical model/versioning, fixture ingestion, balanced cost accounting, conservative outcome attribution, certain-waste detectors (X1 repaired and re-attacked), synthetic demo (re-run deterministic), economics-first surface, privacy export (audit battery E7 all repelled), critical tests (363/363 re-run here). Two checks corrected to false this cycle: real_read_only_github_mode (A12, dynamically proven pre-network dead) and quickstart_docs (advertises that dead command). integration_ci_green stays false solely because the remote Actions run remains unobserved from this environment (gh unauthenticated); all four CI steps were executed locally on bc0f974 by both the auditor (E1/E2/E3/E14) and this director (install/test/demo/pristine-guard), so it is mechanical observation, not engineering risk.",
-    "external_blocker_assessment": "No BLOCKED_EXTERNAL. A12/A12-MASK are small in-repo repairs (env-var policy resolution + two test assertions + one CLI-level test). EPI-1/WORD-1/SEAM-DIV/DOC-NIT are hours each. Remote CI observation needs only next cycle's normal GitHub visibility. Nothing requires an external account or decision."
+    "p0_check_rationale": "Checks kept true are backed by this cycle's executions on pushed head 25bb22c: canonical model/versioning + fixture ingestion + cost identity + conservative attribution (397-test battery incl. cross-package seams); certain-waste detectors strengthened this cycle (core EPI-1 G4 + TRUST-1 G6, product RT-2 alignment, each with negative AND positive controls); synthetic demo deterministic with unchanged economics; economics-first surface unchanged; privacy export extended with runtime-verified DP aggregate publication while all gate batteries still pass; critical tests 397/397 zero-skipped. Two flips to true this cycle: real_read_only_github_mode (A12 closed at the committed CLI surface: env-resolved policy, disclosed provenance, honest exit taxonomy, live network I/O demonstrated) and quickstart_docs (README documents the working command and its policy knobs; quickstart re-executed). integration_ci_green remains false solely because no remote run can be triggered/observed from this environment (see next_action); locally every CI step passes on the exact pushed commit.",
+    "external_blocker_assessment": "No BLOCKED_EXTERNAL for product work: nothing buildable in-repo remains open for P0. The two residuals are pure observation/permission gaps outside repo code: (1) remote Actions run on lab/integration needs a workflows-capable trigger or visibility (supervisor side); (2) landing the optional ci.yml hardening needs the App `workflows` permission. Both are recorded with exact smallest actions; neither blocks further autonomous cycles."
   }
 }
