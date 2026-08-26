@@ -44,7 +44,7 @@ jobs:
           if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
             CHANGED=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}" \
               --jq '.files[]?.filename' 2>/dev/null || true)
-            if grep -qx '.github/workflows/factory-loop.yml' <<<"$CHANGED"; then
+            if grep -Eq '^\.github/workflows/(factory-loop|factory-supervisor)\.yml$' <<<"$CHANGED"; then
               while IFS= read -r RUN_ID; do
                 [[ -n "$RUN_ID" ]] || continue
                 RUN_SHA=$(jq -r --argjson id "$RUN_ID" '.[] | select(.databaseId == $id) | .headSha' <<<"$RUNS")
