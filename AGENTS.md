@@ -72,7 +72,7 @@ A distinct, explicitly versioned `AGENTIC_DYNAMICS_EXPORT` may later export abst
 Every branch/PR/agent must move at least one user-visible or testable V1 capability toward a functioning GitHub-installed product. Do not build a giant platform, generic LLM FinOps dashboard, GitHub replacement, day-one orchestrator, sensitive data lake, or a system that requires millions of runs before producing value.
 
 ## Shared source of truth
-The full master specification is `docs/MASTER_PROMPT.md`. The execution backlog is `docs/PRODUCT_OBJECTIVE.md` plus `docs/workcards/`. Agents MUST read this file and the relevant workcard before modifying code. If a local task conflicts with the master specification, the master specification wins.
+The user's original binding prompt is preserved verbatim in `docs/MASTER_PROMPT_ORIGINAL_FR.md`. The normalized engineering specification is `docs/MASTER_PROMPT.md`. The execution target is `docs/PRODUCT_OBJECTIVE.md` plus `docs/workcards/`. Every agent MUST read this `AGENTS.md`, the original prompt, the normalized specification, the objective and its relevant workcard before modifying code. If a local task conflicts with the original master prompt, the original master prompt wins.
 
 ## North Star
 For this class of agentic work, what configuration produces the greatest **accepted useful work per dollar** — without requiring the customer to reveal source code to the global learning layer?
