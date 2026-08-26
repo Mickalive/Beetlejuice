@@ -37,7 +37,26 @@ jobs:
           set -euo pipefail
 
           RUNS=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow factory-loop.yml --limit 50 \
-            --json databaseId,status,conclusion,createdAt 2>/dev/null || echo '[]')
+            --json databaseId,status,conclusion,createdAt,headSha 2>/dev/null || echo '[]')
+
+          # A control-plane change makes older factory executions unsafe to keep alive.
+          # Cancel only stale runs; never cancel the factory run created by this same commit.
+          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+            CHANGED=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}" \
+              --jq '.files[]?.filename' 2>/dev/null || true)
+            if grep -qx '.github/workflows/factory-loop.yml' <<<"$CHANGED"; then
+              while IFS= read -r RUN_ID; do
+                [[ -n "$RUN_ID" ]] || continue
+                RUN_SHA=$(jq -r --argjson id "$RUN_ID" '.[] | select(.databaseId == $id) | .headSha' <<<"$RUNS")
+                if [[ "$RUN_SHA" != "$GITHUB_SHA" ]]; then
+                  echo "Cancelling stale factory run $RUN_ID at $RUN_SHA after control-plane update $GITHUB_SHA"
+                  gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/cancel" >/dev/null 2>&1 || true
+                fi
+              done < <(jq -r '.[] | select(.status != "completed") | .databaseId' <<<"$RUNS")
+              echo "Stale-cycle cancellation requested; the factory run for this control-plane version may now proceed."
+              exit 0
+            fi
+          fi
 
           ACTIVE=$(jq '[.[] | select(.status != "completed")] | length' <<<"$RUNS")
           if [[ "$ACTIVE" -gt 0 ]]; then
