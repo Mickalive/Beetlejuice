@@ -125,6 +125,48 @@ Hard guarantees enforced in code (`src/collect/client.js`):
 - Data minimization: check-runs are probed **only** for revisions of ingested
   agentic PRs; foreign branches are never fetched.
 
+### Classification policy: explicit, environment or documented defaults
+
+The adapter never guesses which pull requests are agentic: `collectHistory`
+requires an explicit `{ botActors, branchPrefixes }` policy and an empty
+policy ingests nothing. To make unattended real-mode runs practical (audit
+finding A12), the adapter also resolves that policy from the environment:
+
+```js
+import { resolveAgenticPolicyFromEnv } from '@beetlejuice/github';
+
+// { botActors, branchPrefixes } — exactly the shape collectHistory accepts.
+const policy = resolveAgenticPolicyFromEnv(process.env);
+```
+
+Resolution per dimension (actors and branch prefixes are independent):
+
+- env var **unset** → documented conservative default:
+  `SUGGESTED_AGENTIC_ACTORS` (well-known coding-agent bot identities) /
+  `DEFAULT_AGENTIC_BRANCH_PREFIXES` (`beetlejuice/`, `claude/`, `codex/`,
+  `copilot/`, `cursor/`, `devin/`, `jules/`);
+- env var set to **empty string** → explicit opt-out: that dimension matches
+  nothing;
+- env var set otherwise → comma-separated entries (trimmed; empty fragments
+  dropped; whitespace inside an entry fails fast naming the variable).
+
+| Variable | Meaning |
+|---|---|
+| `BEETLEJUICE_BOT_ACTORS` | comma-separated bot logins counted as agentic authors |
+| `BEETLEJUICE_BRANCH_PREFIXES` | comma-separated head-branch prefixes counted as agent-shaped |
+
+Honesty guarantees unchanged by resolution:
+
+- actor allowlist hits stay confidence `measured`; prefix hits stay
+  `inferred`; non-matches are excluded and counted — the defaults only
+  recognize well-known agent identities, they never widen what counts as
+  evidence or cost;
+- malformed values throw before any network I/O;
+- callers that accept both a hand-written policy object and environment
+  resolution should prefer the explicit object and use
+  `resolveAgenticPolicyFromEnv()` only as the fallback — precedence belongs to
+  the calling surface (the product CLI owns its own wiring).
+
 **External validation gap (narrow):** all HTTP behavior is tested against an
 injected transport. The single untested path is the live TLS call to
 `https://api.github.com` itself, which requires a real credential. Operators
@@ -181,6 +223,8 @@ Secret-handling guarantees enforced in code:
 | `BEETLEJUICE_GITHUB_TOKEN` | real-mode sweep | fine-grained PAT or App installation token (read-only) |
 | `BEETLEJUICE_GITHUB_APP_ID` | App auth | numeric App id |
 | `BEETLEJUICE_GITHUB_APP_KEY_PEM` | App auth | private key PEM (single-line `\n`-escaped accepted) |
+| `BEETLEJUICE_BOT_ACTORS` | policy resolution | comma-separated agentic bot logins (unset = suggested defaults, empty = opt-out) |
+| `BEETLEJUICE_BRANCH_PREFIXES` | policy resolution | comma-separated agent branch prefixes (unset = documented defaults, empty = opt-out) |
 | webhook secret | webhook receiver | HMAC-SHA256 shared secret for delivery verification |
 
 None of these is required for fixture tests; nothing here reads them implicitly.

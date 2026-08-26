@@ -28,6 +28,84 @@ export const SUGGESTED_AGENTIC_ACTORS = Object.freeze([
   'google-labs-jules[bot]',
 ]);
 
+/**
+ * Common head-branch prefixes used by known coding agents, offered as the
+ * documented fallback half of resolveAgenticPolicyFromEnv(). Prefix matches
+ * always stay `inferred` confidence — never `measured` — and operators can
+ * replace or disable the whole dimension via BEETLEJUICE_BRANCH_PREFIXES.
+ */
+export const DEFAULT_AGENTIC_BRANCH_PREFIXES = Object.freeze([
+  'beetlejuice/',
+  'claude/',
+  'codex/',
+  'copilot/',
+  'cursor/',
+  'devin/',
+  'jules/',
+]);
+
+/** Environment variable overriding the bot-actor allowlist (comma-separated). */
+export const AGENTIC_ACTORS_ENV = 'BEETLEJUICE_BOT_ACTORS';
+
+/** Environment variable overriding the branch-prefix list (comma-separated). */
+export const AGENTIC_BRANCH_PREFIXES_ENV = 'BEETLEJUICE_BRANCH_PREFIXES';
+
+/**
+ * Resolve an operator classification policy from the environment (audit A12:
+ * the committed product surface needs a policy without interactive prompts).
+ *
+ * Resolution per dimension — actors and prefixes are independent:
+ *   - env var UNSET        -> documented conservative default
+ *                             (SUGGESTED_AGENTIC_ACTORS / DEFAULT_AGENTIC_BRANCH_PREFIXES);
+ *   - env var set to ""    -> explicit opt-out: that dimension ingests nothing;
+ *   - env var set otherwise-> comma-separated entries, trimmed, empties dropped.
+ *
+ * The result has exactly the `{ botActors, branchPrefixes }` input shape that
+ * normalizePolicy()/collectHistory()/runGithubReadOnly() accept. Callers that
+ * also accept a hand-written policy object should treat THAT as the primary
+ * override and use this resolver only as the fallback — the adapter cannot
+ * enforce caller precedence itself.
+ *
+ * Confidence semantics are unchanged by this helper: actor matches are still
+ * labeled `measured`, prefix matches still `inferred`, everything else is
+ * excluded and counted. Defaults only ever classify well-known coding-agent
+ * bot identities as measured; they never widen what counts as evidence.
+ *
+ * @param {object} [env] environment mapping (defaults to process.env)
+ * @returns {{ botActors: string[], branchPrefixes: string[] }} frozen policy input
+ */
+export function resolveAgenticPolicyFromEnv(env = process.env) {
+  if (env === null || typeof env !== 'object') {
+    throw new TypeError('resolveAgenticPolicyFromEnv expects an environment object like process.env');
+  }
+  const botActors = splitEnvList(env[AGENTIC_ACTORS_ENV], AGENTIC_ACTORS_ENV) ?? SUGGESTED_AGENTIC_ACTORS;
+  const branchPrefixes =
+    splitEnvList(env[AGENTIC_BRANCH_PREFIXES_ENV], AGENTIC_BRANCH_PREFIXES_ENV) ?? DEFAULT_AGENTIC_BRANCH_PREFIXES;
+  return Object.freeze({ botActors: Object.freeze([...botActors]), branchPrefixes: Object.freeze([...branchPrefixes]) });
+}
+
+/**
+ * Parse one comma-separated environment value.
+ * @returns {string[]|null} parsed entries, [] for an explicit empty override,
+ *   or null when the variable is unset (caller applies its default).
+ */
+function splitEnvList(raw, envVar) {
+  if (raw === undefined || raw === null) return null;
+  if (typeof raw !== 'string') {
+    throw new TypeError(`${envVar} must be a comma-separated string (got ${typeof raw})`);
+  }
+  const items = [];
+  for (const fragment of raw.split(',')) {
+    const item = fragment.trim();
+    if (item.length === 0) continue;
+    if (/\s/.test(item)) {
+      throw new TypeError(`${envVar} entries must not contain whitespace (got "${item}"); separate multiple values with commas`);
+    }
+    items.push(item);
+  }
+  return items;
+}
+
 export function normalizePolicy(policy) {
   if (policy === undefined || policy === null) {
     throw new TypeError(

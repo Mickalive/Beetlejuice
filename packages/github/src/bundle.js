@@ -28,10 +28,15 @@
  *     bare commit succession, so product certain-waste rules have nothing to
  *     misfire on. (The canonical-event seam keeps richer revision detail for
  *     the tenant ledger, which applies its own guarded rules.)
- *   - Closed-without-merge maps to `aborted` (objective disappeared), matching
- *     this adapter's own event semantics (`execution_finished: aborted`).
- *     GitHub exposes no explicit terminal-failure signal on close, so
- *     `failed` is never claimed from close evidence alone.
+ *   - Closed-without-merge maps to `aborted` here (objective disappeared).
+ *     SEAM-DIV (intentional divergence): the canonical-event path attributes
+ *     the same repository evidence as `failed`, because the tenant ledger
+ *     conservatively resolves an unmerged close as a failed delivery, while
+ *     this bundle resolves it as aborted work. Both are NON-SUCCESS
+ *     attributions from identical evidence — neither counts as accepted, and
+ *     GitHub exposes no explicit terminal-failure signal on close, so neither
+ *     seam claims a measured failure mode beyond the close itself.
+ *     Consumers comparing seams must compare economics, not outcome labels.
  *   - Known cost whose revision binding is not provable rolls up onto its OWN
  *     task's surviving (final/span) execution — totals stay complete without
  *     inventing bindings, and rollups are counted explicitly.
