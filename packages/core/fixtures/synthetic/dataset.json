@@ -1,0 +1,1308 @@
+[
+  {
+    "type": "task_started",
+    "task_ref": "TASK-001",
+    "time": "2026-08-01T00:00:00.000Z",
+    "payload": {},
+    "source": {
+      "adapter": "synthetic",
+      "ref": "fixture://TASK-001",
+      "meta": {
+        "scenario": "success_simple"
+      }
+    }
+  },
+  {
+    "type": "execution_started",
+    "task_ref": "TASK-001",
+    "time": "2026-08-01T00:01:00.000Z",
+    "payload": {
+      "execution_ref": "EX-001-A",
+      "revision_key": "rev-001a"
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-001-A"
+  },
+  {
+    "type": "model_invocation_recorded",
+    "task_ref": "TASK-001",
+    "time": "2026-08-01T00:02:00.000Z",
+    "payload": {
+      "invocation_ref": "MI-001-1",
+      "status": "ok",
+      "cost": {
+        "known": true,
+        "micro_usd": 2000000
+      },
+      "model_class": "frontier",
+      "tokens_in": 12000,
+      "tokens_out": 4000,
+      "latency_ms": 41000
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-001-A"
+  },
+  {
+    "type": "model_invocation_recorded",
+    "task_ref": "TASK-001",
+    "time": "2026-08-01T00:03:00.000Z",
+    "payload": {
+      "invocation_ref": "MI-001-2",
+      "status": "ok",
+      "cost": {
+        "known": true,
+        "micro_usd": 1500000
+      },
+      "model_class": "frontier",
+      "tokens_in": 9000,
+      "tokens_out": 3100,
+      "latency_ms": 33000
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-001-A"
+  },
+  {
+    "type": "tool_invocation_recorded",
+    "task_ref": "TASK-001",
+    "time": "2026-08-01T00:04:00.000Z",
+    "payload": {
+      "tool_ref": "TI-001-1",
+      "status": "ok",
+      "cost": {
+        "known": true,
+        "micro_usd": 100000
+      },
+      "tool_class": "file_edit"
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-001-A"
+  },
+  {
+    "type": "tool_invocation_recorded",
+    "task_ref": "TASK-001",
+    "time": "2026-08-01T00:05:00.000Z",
+    "payload": {
+      "tool_ref": "TI-001-2",
+      "status": "ok",
+      "cost": {
+        "known": true,
+        "micro_usd": 100000
+      },
+      "tool_class": "test_runner"
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-001-A"
+  },
+  {
+    "type": "tool_invocation_recorded",
+    "task_ref": "TASK-001",
+    "time": "2026-08-01T00:06:00.000Z",
+    "payload": {
+      "tool_ref": "TI-001-3",
+      "status": "ok",
+      "cost": {
+        "known": true,
+        "micro_usd": 100000
+      },
+      "tool_class": "linter"
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-001-A"
+  },
+  {
+    "type": "ci_run_recorded",
+    "task_ref": "TASK-001",
+    "time": "2026-08-01T00:07:00.000Z",
+    "payload": {
+      "ci_ref": "CI-001-1",
+      "status": "passed",
+      "cost": {
+        "known": true,
+        "micro_usd": 400000
+      },
+      "equivalence_key": "rev-001a::config-standard",
+      "revision_key": "rev-001a",
+      "started_at": "2026-08-01T00:07:00.000Z",
+      "finished_at": "2026-08-01T00:11:00.000Z",
+      "duration_ms": 240000
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-001-A"
+  },
+  {
+    "type": "execution_finished",
+    "task_ref": "TASK-001",
+    "time": "2026-08-01T00:13:00.000Z",
+    "payload": {
+      "execution_ref": "EX-001-A",
+      "status": "completed"
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-001-A"
+  },
+  {
+    "type": "pull_request_created",
+    "task_ref": "TASK-001",
+    "time": "2026-08-01T00:14:00.000Z",
+    "payload": {
+      "pr_ref": "PR-001"
+    },
+    "source": {
+      "adapter": "synthetic"
+    }
+  },
+  {
+    "type": "pull_request_merged",
+    "task_ref": "TASK-001",
+    "time": "2026-08-01T00:15:00.000Z",
+    "payload": {
+      "pr_ref": "PR-001"
+    },
+    "source": {
+      "adapter": "synthetic"
+    }
+  },
+  {
+    "type": "task_started",
+    "task_ref": "TASK-002",
+    "time": "2026-08-01T00:16:00.000Z",
+    "payload": {},
+    "source": {
+      "adapter": "synthetic"
+    }
+  },
+  {
+    "type": "execution_started",
+    "task_ref": "TASK-002",
+    "time": "2026-08-01T00:17:00.000Z",
+    "payload": {
+      "execution_ref": "EX-002-A",
+      "revision_key": "rev-002a"
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-002-A"
+  },
+  {
+    "type": "model_invocation_recorded",
+    "task_ref": "TASK-002",
+    "time": "2026-08-01T00:18:00.000Z",
+    "payload": {
+      "invocation_ref": "MI-002-1",
+      "status": "ok",
+      "cost": {
+        "known": true,
+        "micro_usd": 1000000
+      },
+      "model_class": "frontier"
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-002-A"
+  },
+  {
+    "type": "ci_run_recorded",
+    "task_ref": "TASK-002",
+    "time": "2026-08-01T00:19:00.000Z",
+    "payload": {
+      "ci_ref": "CI-002-1",
+      "status": "failed",
+      "cost": {
+        "known": true,
+        "micro_usd": 250000
+      },
+      "equivalence_key": "rev-002a::config-standard",
+      "revision_key": "rev-002a",
+      "started_at": "2026-08-01T00:19:00.000Z",
+      "finished_at": "2026-08-01T00:22:00.000Z",
+      "duration_ms": 180000
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-002-A"
+  },
+  {
+    "type": "execution_finished",
+    "task_ref": "TASK-002",
+    "time": "2026-08-01T00:24:00.000Z",
+    "payload": {
+      "execution_ref": "EX-002-A",
+      "status": "completed"
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-002-A"
+  },
+  {
+    "type": "pull_request_created",
+    "task_ref": "TASK-002",
+    "time": "2026-08-01T00:25:00.000Z",
+    "payload": {
+      "pr_ref": "PR-002"
+    },
+    "source": {
+      "adapter": "synthetic"
+    }
+  },
+  {
+    "type": "pull_request_closed",
+    "task_ref": "TASK-002",
+    "time": "2026-08-01T00:26:00.000Z",
+    "payload": {
+      "pr_ref": "PR-002"
+    },
+    "source": {
+      "adapter": "synthetic"
+    }
+  },
+  {
+    "type": "task_started",
+    "task_ref": "TASK-003",
+    "time": "2026-08-01T00:27:00.000Z",
+    "payload": {},
+    "source": {
+      "adapter": "synthetic"
+    }
+  },
+  {
+    "type": "execution_started",
+    "task_ref": "TASK-003",
+    "time": "2026-08-01T00:28:00.000Z",
+    "payload": {
+      "execution_ref": "EX-003-A",
+      "revision_key": "rev-003a"
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-003-A"
+  },
+  {
+    "type": "model_invocation_recorded",
+    "task_ref": "TASK-003",
+    "time": "2026-08-01T00:29:00.000Z",
+    "payload": {
+      "invocation_ref": "MI-003-1",
+      "status": "ok",
+      "cost": {
+        "known": true,
+        "micro_usd": 800000
+      },
+      "model_class": "mid"
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-003-A"
+  },
+  {
+    "type": "execution_finished",
+    "task_ref": "TASK-003",
+    "time": "2026-08-01T00:30:00.000Z",
+    "payload": {
+      "execution_ref": "EX-003-A",
+      "status": "aborted"
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-003-A"
+  },
+  {
+    "type": "task_aborted",
+    "task_ref": "TASK-003",
+    "time": "2026-08-01T00:31:00.000Z",
+    "payload": {},
+    "source": {
+      "adapter": "synthetic"
+    }
+  },
+  {
+    "type": "task_started",
+    "task_ref": "TASK-004",
+    "time": "2026-08-01T00:32:00.000Z",
+    "payload": {},
+    "source": {
+      "adapter": "synthetic"
+    }
+  },
+  {
+    "type": "execution_started",
+    "task_ref": "TASK-004",
+    "time": "2026-08-01T00:33:00.000Z",
+    "payload": {
+      "execution_ref": "EX-004-A",
+      "revision_key": "rev-004a"
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-004-A"
+  },
+  {
+    "type": "model_invocation_recorded",
+    "task_ref": "TASK-004",
+    "time": "2026-08-01T00:34:00.000Z",
+    "payload": {
+      "invocation_ref": "MI-004-1",
+      "status": "error",
+      "cost": {
+        "known": true,
+        "micro_usd": 1200000
+      },
+      "model_class": "frontier",
+      "failure_class": "network_timeout",
+      "attempt_equivalence_key": "att-t4-implement"
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-004-A"
+  },
+  {
+    "type": "retry_recorded",
+    "task_ref": "TASK-004",
+    "time": "2026-08-01T00:35:00.000Z",
+    "payload": {
+      "retry_of_ref": "MI-004-1"
+    },
+    "source": {
+      "adapter": "synthetic"
+    }
+  },
+  {
+    "type": "model_invocation_recorded",
+    "task_ref": "TASK-004",
+    "time": "2026-08-01T00:36:00.000Z",
+    "payload": {
+      "invocation_ref": "MI-004-2",
+      "status": "ok",
+      "cost": {
+        "known": true,
+        "micro_usd": 1200000
+      },
+      "model_class": "frontier",
+      "attempt_equivalence_key": "att-t4-implement"
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-004-A"
+  },
+  {
+    "type": "ci_run_recorded",
+    "task_ref": "TASK-004",
+    "time": "2026-08-01T00:37:00.000Z",
+    "payload": {
+      "ci_ref": "CI-004-1",
+      "status": "passed",
+      "cost": {
+        "known": true,
+        "micro_usd": 300000
+      },
+      "equivalence_key": "rev-004a::config-standard",
+      "revision_key": "rev-004a",
+      "started_at": "2026-08-01T00:37:00.000Z",
+      "finished_at": "2026-08-01T00:40:00.000Z",
+      "duration_ms": 190000
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-004-A"
+  },
+  {
+    "type": "execution_finished",
+    "task_ref": "TASK-004",
+    "time": "2026-08-01T00:42:00.000Z",
+    "payload": {
+      "execution_ref": "EX-004-A",
+      "status": "completed"
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-004-A"
+  },
+  {
+    "type": "pull_request_created",
+    "task_ref": "TASK-004",
+    "time": "2026-08-01T00:43:00.000Z",
+    "payload": {
+      "pr_ref": "PR-004"
+    },
+    "source": {
+      "adapter": "synthetic"
+    }
+  },
+  {
+    "type": "pull_request_merged",
+    "task_ref": "TASK-004",
+    "time": "2026-08-01T00:44:00.000Z",
+    "payload": {
+      "pr_ref": "PR-004"
+    },
+    "source": {
+      "adapter": "synthetic"
+    }
+  },
+  {
+    "type": "task_started",
+    "task_ref": "TASK-005",
+    "time": "2026-08-01T00:45:00.000Z",
+    "payload": {},
+    "source": {
+      "adapter": "synthetic"
+    }
+  },
+  {
+    "type": "execution_started",
+    "task_ref": "TASK-005",
+    "time": "2026-08-01T00:46:00.000Z",
+    "payload": {
+      "execution_ref": "EX-005-A",
+      "revision_key": "rev-005a"
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-005-A"
+  },
+  {
+    "type": "model_invocation_recorded",
+    "task_ref": "TASK-005",
+    "time": "2026-08-01T00:47:00.000Z",
+    "payload": {
+      "invocation_ref": "MI-005-1",
+      "status": "ok",
+      "cost": {
+        "known": true,
+        "micro_usd": 1000000
+      },
+      "model_class": "frontier"
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-005-A"
+  },
+  {
+    "type": "ci_run_recorded",
+    "task_ref": "TASK-005",
+    "time": "2026-08-01T00:48:00.000Z",
+    "payload": {
+      "ci_ref": "CI-005-1",
+      "status": "passed",
+      "cost": {
+        "known": true,
+        "micro_usd": 400000
+      },
+      "equivalence_key": "rev-005a::config-standard",
+      "revision_key": "rev-005a",
+      "started_at": "2026-08-01T00:48:00.000Z",
+      "finished_at": "2026-08-01T00:52:00.000Z",
+      "duration_ms": 250000
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-005-A"
+  },
+  {
+    "type": "ci_run_recorded",
+    "task_ref": "TASK-005",
+    "time": "2026-08-01T00:54:00.000Z",
+    "payload": {
+      "ci_ref": "CI-005-2",
+      "status": "passed",
+      "cost": {
+        "known": true,
+        "micro_usd": 400000
+      },
+      "equivalence_key": "rev-005a::config-standard",
+      "revision_key": "rev-005a",
+      "started_at": "2026-08-01T00:54:00.000Z",
+      "finished_at": "2026-08-01T00:58:00.000Z",
+      "duration_ms": 260000
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-005-A"
+  },
+  {
+    "type": "execution_finished",
+    "task_ref": "TASK-005",
+    "time": "2026-08-01T01:00:00.000Z",
+    "payload": {
+      "execution_ref": "EX-005-A",
+      "status": "completed"
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-005-A"
+  },
+  {
+    "type": "pull_request_created",
+    "task_ref": "TASK-005",
+    "time": "2026-08-01T01:01:00.000Z",
+    "payload": {
+      "pr_ref": "PR-005"
+    },
+    "source": {
+      "adapter": "synthetic"
+    }
+  },
+  {
+    "type": "pull_request_merged",
+    "task_ref": "TASK-005",
+    "time": "2026-08-01T01:02:00.000Z",
+    "payload": {
+      "pr_ref": "PR-005"
+    },
+    "source": {
+      "adapter": "synthetic"
+    }
+  },
+  {
+    "type": "task_started",
+    "task_ref": "TASK-006",
+    "time": "2026-08-01T01:03:00.000Z",
+    "payload": {},
+    "source": {
+      "adapter": "synthetic"
+    }
+  },
+  {
+    "type": "execution_started",
+    "task_ref": "TASK-006",
+    "time": "2026-08-01T01:04:00.000Z",
+    "payload": {
+      "execution_ref": "EX-006-A",
+      "revision_key": "rev-006a"
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-006-A"
+  },
+  {
+    "type": "model_invocation_recorded",
+    "task_ref": "TASK-006",
+    "time": "2026-08-01T01:05:00.000Z",
+    "payload": {
+      "invocation_ref": "MI-006-1",
+      "status": "error",
+      "cost": {
+        "known": true,
+        "micro_usd": 900000
+      },
+      "model_class": "frontier",
+      "failure_class": "auth_error",
+      "attempt_equivalence_key": "att-t6-deploy-fix"
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-006-A"
+  },
+  {
+    "type": "retry_recorded",
+    "task_ref": "TASK-006",
+    "time": "2026-08-01T01:06:00.000Z",
+    "payload": {
+      "retry_of_ref": "MI-006-1"
+    },
+    "source": {
+      "adapter": "synthetic"
+    }
+  },
+  {
+    "type": "model_invocation_recorded",
+    "task_ref": "TASK-006",
+    "time": "2026-08-01T01:07:00.000Z",
+    "payload": {
+      "invocation_ref": "MI-006-2",
+      "status": "error",
+      "cost": {
+        "known": true,
+        "micro_usd": 900000
+      },
+      "model_class": "frontier",
+      "failure_class": "auth_error",
+      "attempt_equivalence_key": "att-t6-deploy-fix"
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-006-A"
+  },
+  {
+    "type": "retry_recorded",
+    "task_ref": "TASK-006",
+    "time": "2026-08-01T01:08:00.000Z",
+    "payload": {
+      "retry_of_ref": "MI-006-2"
+    },
+    "source": {
+      "adapter": "synthetic"
+    }
+  },
+  {
+    "type": "model_invocation_recorded",
+    "task_ref": "TASK-006",
+    "time": "2026-08-01T01:09:00.000Z",
+    "payload": {
+      "invocation_ref": "MI-006-3",
+      "status": "error",
+      "cost": {
+        "known": true,
+        "micro_usd": 900000
+      },
+      "model_class": "frontier",
+      "failure_class": "auth_error",
+      "attempt_equivalence_key": "att-t6-deploy-fix"
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-006-A"
+  },
+  {
+    "type": "human_intervention_recorded",
+    "task_ref": "TASK-006",
+    "time": "2026-08-01T01:10:00.000Z",
+    "payload": {
+      "intervention_ref": "HI-006-1",
+      "intervention_class": "credential_fix",
+      "cost": {
+        "known": false,
+        "reason": "human review minutes not priceable from observed evidence"
+      }
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-006-A"
+  },
+  {
+    "type": "model_invocation_recorded",
+    "task_ref": "TASK-006",
+    "time": "2026-08-01T01:11:00.000Z",
+    "payload": {
+      "invocation_ref": "MI-006-4",
+      "status": "ok",
+      "cost": {
+        "known": true,
+        "micro_usd": 900000
+      },
+      "model_class": "frontier",
+      "attempt_equivalence_key": "att-t6-deploy-fix-v2"
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-006-A"
+  },
+  {
+    "type": "ci_run_recorded",
+    "task_ref": "TASK-006",
+    "time": "2026-08-01T01:12:00.000Z",
+    "payload": {
+      "ci_ref": "CI-006-1",
+      "status": "passed",
+      "cost": {
+        "known": true,
+        "micro_usd": 300000
+      },
+      "equivalence_key": "rev-006a::config-standard",
+      "revision_key": "rev-006a",
+      "started_at": "2026-08-01T01:12:00.000Z",
+      "finished_at": "2026-08-01T01:15:00.000Z",
+      "duration_ms": 170000
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-006-A"
+  },
+  {
+    "type": "execution_finished",
+    "task_ref": "TASK-006",
+    "time": "2026-08-01T01:17:00.000Z",
+    "payload": {
+      "execution_ref": "EX-006-A",
+      "status": "completed"
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-006-A"
+  },
+  {
+    "type": "pull_request_created",
+    "task_ref": "TASK-006",
+    "time": "2026-08-01T01:18:00.000Z",
+    "payload": {
+      "pr_ref": "PR-006"
+    },
+    "source": {
+      "adapter": "synthetic"
+    }
+  },
+  {
+    "type": "pull_request_merged",
+    "task_ref": "TASK-006",
+    "time": "2026-08-01T01:19:00.000Z",
+    "payload": {
+      "pr_ref": "PR-006"
+    },
+    "source": {
+      "adapter": "synthetic"
+    }
+  },
+  {
+    "type": "task_started",
+    "task_ref": "TASK-007",
+    "time": "2026-08-01T01:20:00.000Z",
+    "payload": {},
+    "source": {
+      "adapter": "synthetic"
+    }
+  },
+  {
+    "type": "execution_started",
+    "task_ref": "TASK-007",
+    "time": "2026-08-01T01:21:00.000Z",
+    "payload": {
+      "execution_ref": "EX-007-A",
+      "revision_key": "rev-007a"
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-007-A"
+  },
+  {
+    "type": "model_invocation_recorded",
+    "task_ref": "TASK-007",
+    "time": "2026-08-01T01:22:00.000Z",
+    "payload": {
+      "invocation_ref": "MI-007-1",
+      "status": "ok",
+      "cost": {
+        "known": true,
+        "micro_usd": 1100000
+      },
+      "model_class": "frontier"
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-007-A"
+  },
+  {
+    "type": "execution_finished",
+    "task_ref": "TASK-007",
+    "time": "2026-08-01T01:23:00.000Z",
+    "payload": {
+      "execution_ref": "EX-007-A",
+      "status": "superseded",
+      "superseded_by_execution_ref": "EX-007-B"
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-007-A"
+  },
+  {
+    "type": "execution_started",
+    "task_ref": "TASK-007",
+    "time": "2026-08-01T01:24:00.000Z",
+    "payload": {
+      "execution_ref": "EX-007-B",
+      "revision_key": "rev-007b"
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-007-B"
+  },
+  {
+    "type": "model_invocation_recorded",
+    "task_ref": "TASK-007",
+    "time": "2026-08-01T01:25:00.000Z",
+    "payload": {
+      "invocation_ref": "MI-007-2",
+      "status": "ok",
+      "cost": {
+        "known": true,
+        "micro_usd": 1300000
+      },
+      "model_class": "frontier"
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-007-B"
+  },
+  {
+    "type": "ci_run_recorded",
+    "task_ref": "TASK-007",
+    "time": "2026-08-01T01:26:00.000Z",
+    "payload": {
+      "ci_ref": "CI-007-1",
+      "status": "passed",
+      "cost": {
+        "known": true,
+        "micro_usd": 350000
+      },
+      "equivalence_key": "rev-007b::config-standard",
+      "revision_key": "rev-007b",
+      "started_at": "2026-08-01T01:26:00.000Z",
+      "finished_at": "2026-08-01T01:29:00.000Z",
+      "duration_ms": 175000
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-007-B"
+  },
+  {
+    "type": "execution_finished",
+    "task_ref": "TASK-007",
+    "time": "2026-08-01T01:31:00.000Z",
+    "payload": {
+      "execution_ref": "EX-007-B",
+      "status": "completed"
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-007-B"
+  },
+  {
+    "type": "pull_request_created",
+    "task_ref": "TASK-007",
+    "time": "2026-08-01T01:32:00.000Z",
+    "payload": {
+      "pr_ref": "PR-007"
+    },
+    "source": {
+      "adapter": "synthetic"
+    }
+  },
+  {
+    "type": "pull_request_merged",
+    "task_ref": "TASK-007",
+    "time": "2026-08-01T01:33:00.000Z",
+    "payload": {
+      "pr_ref": "PR-007"
+    },
+    "source": {
+      "adapter": "synthetic"
+    }
+  },
+  {
+    "type": "task_started",
+    "task_ref": "TASK-008",
+    "time": "2026-08-01T01:34:00.000Z",
+    "payload": {},
+    "source": {
+      "adapter": "synthetic"
+    }
+  },
+  {
+    "type": "execution_started",
+    "task_ref": "TASK-008",
+    "time": "2026-08-01T01:35:00.000Z",
+    "payload": {
+      "execution_ref": "EX-008-A",
+      "revision_key": "rev-008a"
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-008-A"
+  },
+  {
+    "type": "model_invocation_recorded",
+    "task_ref": "TASK-008",
+    "time": "2026-08-01T01:36:00.000Z",
+    "payload": {
+      "invocation_ref": "MI-008-1",
+      "status": "ok",
+      "cost": {
+        "known": true,
+        "micro_usd": 700000
+      },
+      "model_class": "frontier"
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-008-A"
+  },
+  {
+    "type": "model_invocation_recorded",
+    "task_ref": "TASK-008",
+    "time": "2026-08-01T01:37:00.000Z",
+    "payload": {
+      "invocation_ref": "MI-008-2",
+      "status": "error",
+      "cost": {
+        "known": true,
+        "micro_usd": 650000
+      },
+      "model_class": "frontier",
+      "failure_class": "network_timeout",
+      "attempt_equivalence_key": "att-t8-refactor"
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-008-A"
+  },
+  {
+    "type": "retry_recorded",
+    "task_ref": "TASK-008",
+    "time": "2026-08-01T01:38:00.000Z",
+    "payload": {
+      "retry_of_ref": "MI-008-2"
+    },
+    "source": {
+      "adapter": "synthetic"
+    }
+  },
+  {
+    "type": "model_invocation_recorded",
+    "task_ref": "TASK-008",
+    "time": "2026-08-01T01:39:00.000Z",
+    "payload": {
+      "invocation_ref": "MI-008-3",
+      "status": "ok",
+      "cost": {
+        "known": true,
+        "micro_usd": 650000
+      },
+      "model_class": "frontier",
+      "attempt_equivalence_key": "att-t8-refactor"
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-008-A"
+  },
+  {
+    "type": "compute_usage_recorded",
+    "task_ref": "TASK-008",
+    "time": "2026-08-01T01:40:00.000Z",
+    "payload": {
+      "resource_ref": "CU-008-1",
+      "cost": {
+        "known": true,
+        "micro_usd": 140000
+      },
+      "resource_class": "sandbox_vm_minutes"
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-008-A"
+  },
+  {
+    "type": "validation_recorded",
+    "task_ref": "TASK-008",
+    "time": "2026-08-01T01:41:00.000Z",
+    "payload": {
+      "validation_ref": "VA-008-1",
+      "status": "passed",
+      "cost": {
+        "known": true,
+        "micro_usd": 70000
+      },
+      "validation_class": "typecheck"
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-008-A"
+  },
+  {
+    "type": "ci_run_recorded",
+    "task_ref": "TASK-008",
+    "time": "2026-08-01T01:42:00.000Z",
+    "payload": {
+      "ci_ref": "CI-008-1",
+      "status": "failed",
+      "cost": {
+        "known": true,
+        "micro_usd": 400000
+      },
+      "equivalence_key": "rev-008a::config-standard",
+      "revision_key": "rev-008a",
+      "started_at": "2026-08-01T01:42:00.000Z",
+      "finished_at": "2026-08-01T01:45:00.000Z",
+      "duration_ms": 160000
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-008-A"
+  },
+  {
+    "type": "ci_run_recorded",
+    "task_ref": "TASK-008",
+    "time": "2026-08-01T01:47:00.000Z",
+    "payload": {
+      "ci_ref": "CI-008-2",
+      "status": "passed",
+      "cost": {
+        "known": true,
+        "micro_usd": 450000
+      },
+      "equivalence_key": "rev-008b::config-standard",
+      "revision_key": "rev-008b",
+      "started_at": "2026-08-01T01:47:00.000Z",
+      "finished_at": "2026-08-01T01:51:00.000Z",
+      "duration_ms": 210000
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-008-A"
+  },
+  {
+    "type": "execution_finished",
+    "task_ref": "TASK-008",
+    "time": "2026-08-01T01:53:00.000Z",
+    "payload": {
+      "execution_ref": "EX-008-A",
+      "status": "completed"
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-008-A"
+  },
+  {
+    "type": "pull_request_created",
+    "task_ref": "TASK-008",
+    "time": "2026-08-01T01:54:00.000Z",
+    "payload": {
+      "pr_ref": "PR-008"
+    },
+    "source": {
+      "adapter": "synthetic"
+    }
+  },
+  {
+    "type": "pull_request_merged",
+    "task_ref": "TASK-008",
+    "time": "2026-08-01T01:55:00.000Z",
+    "payload": {
+      "pr_ref": "PR-008"
+    },
+    "source": {
+      "adapter": "synthetic"
+    }
+  },
+  {
+    "type": "task_started",
+    "task_ref": "TASK-009",
+    "time": "2026-08-01T01:56:00.000Z",
+    "payload": {},
+    "source": {
+      "adapter": "synthetic"
+    }
+  },
+  {
+    "type": "execution_started",
+    "task_ref": "TASK-009",
+    "time": "2026-08-01T01:57:00.000Z",
+    "payload": {
+      "execution_ref": "EX-009-A",
+      "revision_key": "rev-009a"
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-009-A"
+  },
+  {
+    "type": "model_invocation_recorded",
+    "task_ref": "TASK-009",
+    "time": "2026-08-01T01:58:00.000Z",
+    "payload": {
+      "invocation_ref": "MI-009-1",
+      "status": "ok",
+      "cost": {
+        "known": true,
+        "micro_usd": 500000
+      },
+      "model_class": "mid"
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-009-A"
+  },
+  {
+    "type": "validation_recorded",
+    "task_ref": "TASK-009",
+    "time": "2026-08-01T01:59:00.000Z",
+    "payload": {
+      "validation_ref": "VA-009-1",
+      "status": "skipped",
+      "cost": {
+        "known": false,
+        "reason": "external audit priced outside observed evidence"
+      },
+      "validation_class": "security_review"
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-009-A"
+  },
+  {
+    "type": "task_started",
+    "task_ref": "TASK-010",
+    "time": "2026-08-01T02:00:00.000Z",
+    "payload": {},
+    "source": {
+      "adapter": "synthetic"
+    }
+  },
+  {
+    "type": "execution_started",
+    "task_ref": "TASK-010",
+    "time": "2026-08-01T02:01:00.000Z",
+    "payload": {
+      "execution_ref": "EX-010-A",
+      "revision_key": "rev-010a"
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-010-A"
+  },
+  {
+    "type": "model_invocation_recorded",
+    "task_ref": "TASK-010",
+    "time": "2026-08-01T02:02:00.000Z",
+    "payload": {
+      "invocation_ref": "MI-010-1",
+      "status": "ok",
+      "cost": {
+        "known": true,
+        "micro_usd": 1600000
+      },
+      "model_class": "frontier"
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-010-A"
+  },
+  {
+    "type": "ci_run_recorded",
+    "task_ref": "TASK-010",
+    "time": "2026-08-01T02:03:00.000Z",
+    "payload": {
+      "ci_ref": "CI-010-1",
+      "status": "passed",
+      "cost": {
+        "known": true,
+        "micro_usd": 400000
+      },
+      "equivalence_key": "rev-010a::config-standard",
+      "revision_key": "rev-010a",
+      "started_at": "2026-08-01T02:03:00.000Z",
+      "finished_at": "2026-08-01T02:06:00.000Z",
+      "duration_ms": 180000
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-010-A"
+  },
+  {
+    "type": "execution_finished",
+    "task_ref": "TASK-010",
+    "time": "2026-08-01T02:08:00.000Z",
+    "payload": {
+      "execution_ref": "EX-010-A",
+      "status": "completed"
+    },
+    "source": {
+      "adapter": "synthetic"
+    },
+    "execution_ref": "EX-010-A"
+  },
+  {
+    "type": "pull_request_created",
+    "task_ref": "TASK-010",
+    "time": "2026-08-01T02:09:00.000Z",
+    "payload": {
+      "pr_ref": "PR-010"
+    },
+    "source": {
+      "adapter": "synthetic"
+    }
+  },
+  {
+    "type": "pull_request_merged",
+    "task_ref": "TASK-010",
+    "time": "2026-08-01T02:10:00.000Z",
+    "payload": {
+      "pr_ref": "PR-010"
+    },
+    "source": {
+      "adapter": "synthetic"
+    }
+  },
+  {
+    "type": "human_rework_recorded",
+    "task_ref": "TASK-010",
+    "time": "2026-08-01T02:11:00.000Z",
+    "payload": {
+      "rework_ref": "HR-010-1"
+    },
+    "source": {
+      "adapter": "synthetic"
+    }
+  },
+  {
+    "type": "revert_detected",
+    "task_ref": "TASK-010",
+    "time": "2026-08-01T02:12:00.000Z",
+    "payload": {
+      "pr_ref": "PR-010"
+    },
+    "source": {
+      "adapter": "synthetic"
+    }
+  }
+]

@@ -1,0 +1,18 @@
+{
+  "name": "@beetlejuice/core",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Vendor-neutral AGENTIC_TASK canonical model, cost accounting, outcome attribution and certain-waste detection for Beetlejuice.",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "scripts": {
+    "test": "node --test",
+    "fixtures:generate": "node fixtures/synthetic/generate.js"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
