@@ -1,8 +1,8 @@
 {
   "schema_version": "1",
-  "status": "BUILDING",
+  "status": "INTEGRATING",
   "continue": true,
-  "next_action": "INTEGRATE_LANES_WITH_COMMITTED_E2E_TEST: merge the four verified lane snapshots (core@4ebc931, github@3b0f716, privacy@e8b1dba, product@8173d02 — 267 passing tests re-run by director) into ONE runnable workspace on lab/integration with a committed cross-package e2e (github fixture collectHistory -> TenantLedger.appendAll -> ledger.audit() -> validateCoreAuditExport -> renderMarkdown), repairing the seam break this test will immediately expose: core findings must serialize evidence_units[] (A2 — proven live: product CLI exits 2 on genuine core audit() output; adding evidence_units mechanically renders the full report). Land R1/R3/R5 in the same pass so 'certain' waste claims survive audit.",
+  "next_action": "MOUNT_PROVEN_MERGE_AND_REPAIR_X1: merge the four verified lane snapshots (core@f23510e, github@3f88f34, privacy@56a1523, product@34380a3) onto lab/integration — director re-executed this exact merge 2026-08-26 in scratch worktree /tmp/opencode/bj-dir-verify/merge-test@768bb03: 4x clean merge, zero conflicts, npm test = 319/319 pass in one suite, npm run demo exit 0 ($28.57 measured / 2 accepted / $15.09 per outcome / $8.99 certainly avoidable) — commit and push so CI runs on real product code for the first time; then in the same integration pass repair X1 (packages/core/src/waste/rules/duplicate-ci.js lines 49-68 charge confidence=certain for any post-pass repeat regardless of its terminal status; its own explanation 'Its result could not differ' is disproven when a repeat FAILED — mirror R1/G1 epistemics: abstain for that revision_key partition when any post-pass repeat terminated non-passed, add negative regression like waste-det-retry.test.js's R1 control). Sequenced immediately after within integration: A7 (give --input a real v2-bundle producer via github-lane buildNormalizedBundle + round-trip test, or de-document --input as real mode), A9 (committed cross-package e2e: fixture client -> collectHistory -> TenantLedger.appendAll -> buildCoreAuditExport -> validateCoreAuditExport/renderMarkdown — current core_seam.test.js consumes a frozen fixture file, not sibling packages, so it cannot catch seam drift like A2/A7 did), A6/R6 (ci.yml 'Require a real test suite' find prunes only ./node_modules — add .opencode prune), A11 (--github OWNER/REPO token->report committed command closing P0 #7/#11 as behavior), A10 (tenant-audit -> normalizeTenantRecord producer mapping + round-trip privacy test over real audit data). No p0_check flips until each criterion is backed by an executed command on the mounted lab/integration.",
   "blocking_reason": null,
   "p0_checks": {
     "canonical_agentic_task": false,
@@ -18,73 +18,62 @@
     "quickstart_docs": false,
     "integration_ci_green": false
   },
-  "last_verified_commit": "187f566c748f160c8abab554d1dddff598247c8e",
-  "cycle": 32926312167,
+  "last_verified_commit": "c935960a47f8fbd538208e49ad0fb9e542c35eee",
+  "cycle": 32931221589,
   "evidence": {
-    "closed_cycle": 32926312167,
-    "verified_at_utc": "2026-08-26T05:05:00Z",
-    "candidate_head": "187f566c748f160c8abab554d1dddff598247c8e",
+    "closed_cycle": 32931221589,
+    "verified_at_utc": "2026-08-26T05:40:08Z",
+    "candidate_head": "c935960a47f8fbd538208e49ad0fb9e542c35eee",
     "audit_report_present": true,
     "audit_verdict": "REJECT_NOT_P0_READY",
     "audit_p0_score_on_candidate": "0/12",
-    "audit_source": "reports/latest-product-audit.md (mounted from refs/heads/cycle/32926312167/audit @ bf8bb92; matches origin/cycle/32926312167/audit)",
+    "audit_p0_score_on_proven_merged_workspace": "10/12 (not mounted; fails only #5 X1 and #7 no committed token->report command)",
+    "audit_source": "reports/latest-product-audit.md (mounted from origin/cycle/32931221589/audit @ a33f8bc — director diff vs ref = 0 lines, byte-identical)",
     "candidate_checks": [
       {
         "command": "git ls-tree -r HEAD --name-only | grep -cE '^(packages|apps)/'",
-        "result": "0 — candidate still contains zero product code; lab/integration unchanged since cycle 32922397698"
+        "result": "0 — candidate still contains zero product code; third consecutive cycle unmounted"
       },
       {
         "command": "npm install --ignore-scripts && npm test",
         "exit_code": 0,
-        "result": "VACUOUS_PASS: # tests 0 — CI 'Require a real test suite' guard fails on clean checkout (guard also blind to dot-dir vendored trees: prune list covers only ./node_modules, A6 confirmed in ci.yml)"
+        "result": "VACUOUS_PASS re-confirmed by director: '# tests 0 / # pass 0'"
       },
       {
         "command": "npm run demo",
         "exit_code": 1,
-        "result": "MODULE_NOT_FOUND: apps/cli/src/demo.js does not exist on candidate"
+        "result": "MODULE_NOT_FOUND apps/cli/src/demo.js — matches audit E2"
       }
     ],
-    "director_rerun_lane_tests": {
-      "core": {
-        "snapshot": "origin/cycle/32921371826/core@4ebc931",
-        "tests": "59/59 pass"
-      },
-      "github": {
-        "snapshot": "origin/cycle/32926312167/github@3b0f716",
-        "tests": "93/93 pass"
-      },
-      "privacy": {
-        "snapshot": "origin/cycle/32926312167/privacy@e8b1dba",
-        "tests": "59/59 pass"
-      },
-      "product": {
-        "snapshot": "origin/cycle/32926312167/product@8173d02",
-        "tests": "56/56 pass"
-      },
-      "total_passing": 267
+    "director_trial_integration": {
+      "method": "git worktree add --detach /tmp/opencode/bj-dir-verify/merge-test origin/lab/integration; git merge f23510e 3f88f34 56a1523 34380a3",
+      "merge_conflicts": 0,
+      "trial_head": "768bb039fd740478b606999f9590fb9b3c01a921",
+      "npm_test": "# tests 319 / # pass 319 / # fail 0 — one suite, exit 0 (matches audit E21)",
+      "npm_run_demo": "exit 0, economics-first markdown report, $28.57 measured / $30.17 representable total / tokens confined to secondary diagnostics (matches audit E22)"
     },
-    "director_seam_probes": [
+    "director_defect_confirmations": [
       {
-        "seam": "github(source) -> core(tenant analytics)",
-        "probe": "fixture e2e collectHistory(in-memory client) -> assembleAudit -> REAL TenantLedger.appendAll",
-        "result": "23/23 events accepted unmodified; reconstruct yields tasks t:pr:101/102/103 (15+5+3 events) — seam viable, still unwired in any committed code path"
+        "finding": "X1 (HIGH, blocks P0 #5 even after integration)",
+        "verification": "source inspection of packages/core/src/waste/rules/duplicate-ci.js on trial merge: detect() charges every run starting after keptPass finished passed with confidence=certain and explanation 'Its result could not differ', with NO check of the repeat's terminal status — a post-pass repeat that FAILED disproves determinism yet is charged certain (audit E14 executed it live)"
       },
       {
-        "seam": "core(tenant analytics) -> product(report surface)",
-        "probe": "JSON envelope of genuine ledger.audit() fed to product CLI --core-audit",
-        "result": "REJECTED exit 2: $.audit.waste.findings[0..1].evidence_units required + export_version must be \"1\" — A2 reproduced. Positive control: adding evidence_units mechanically (export_version=1) renders full economics-first report, exit 0 ($0.232 measured / 1 accepted / $0.23 per outcome / waste ratio 100% of measured spend on an accepted task — sanity-note observation from audit §6 stands)"
+        "finding": "A7 (HIGH seam break)",
+        "verification": "apps/cli/src/schema.js line 290 requires $.collector_version on the --input bundle while grep across merged tree finds zero producers of the schema-v2 envelope outside the product lane's synthetic generator; genuine assembleAudit output {events,stats} is rejected (audit E23)"
       },
       {
-        "seam": "D5 events() frozen-view claim",
-        "probe": "ledger.events().push({bogus:true}) then ledger.audit()",
-        "result": "push succeeded and CORRUPTED the next audit(): phantom task aggregate with taskRef=undefined appeared in serialized output — D5 live with demonstrated data-integrity impact, not just a docstring lie"
+        "finding": "A9 (no committed cross-package e2e)",
+        "verification": "apps/cli/test/core_seam.test.js validates a committed fixture JSON (fixtures/core-audit-export-v1.json); no test imports sibling packages or executes collectHistory->ledger->export end-to-end, so seam drift (A2, A7 class) remains invisible to CI"
       },
       {
-        "seam": "D1/D3 rule boundaries",
-        "probe": "source/test inspection of core lane",
-        "result": "waste-det-retry.test.js:31-37 still asserts successful M3 (status ok) is charged confidence=certain (D1 live, codified); src/waste/rules/duplicate-ci.js contains zero revision_key handling (D3 live)"
+        "finding": "A6/R6 (CI guard blind to vendored dot-dirs)",
+        "verification": ".github/workflows/ci.yml 'Require a real test suite' find prunes only ./node_modules; vendored .opencode/node_modules zod tests would inflate counts in dev workdirs (audit E4: 147 of 149 counted files are vendored)"
+      },
+      {
+        "finding": "Lane-level repairs held (R1/R3/R5/A2 closed producer+consumer side)",
+        "verification": "audit E12/E13/E14/E15 executed rule-boundary batteries all-correct except X1; director confirmed duplicate-ci.js now partitions by revision_key (R3 present) and det-retry success-poisoning present per audit E13"
       }
     ],
-    "p0_check_rationale": "All checks graded against the integration candidate per docs/PRODUCT_OBJECTIVE.md. Candidate has zero product code and zero tests, so every check stays false regardless of strong lane-level passes recorded above. No check flips until lanes are integrated and each criterion is backed by an executed command on lab/integration."
+    "p0_check_rationale": "All checks remain graded against the mounted integration candidate per docs/PRODUCT_OBJECTIVE.md. The candidate mounts zero product code and zero tests, so every check stays false regardless of the now-director-verified fact that all four lanes merge cleanly into a 319/319-test workspace with a working economics-first demo. The material change this cycle: integration risk is retired (executed twice independently — audit E20-E22 and director trial merge), so mounting the merge plus the X1 repair are the shortest remaining path to flipping most P0 checks. No check flips until backed by an executed command on pushed lab/integration."
   }
 }
