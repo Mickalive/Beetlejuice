@@ -1,0 +1,12 @@
+# Dependencies
+node_modules/
+
+# Product build artifacts
+apps/cli/out/
+dist/
+build/
+
+# Logs / temp
+*.log
+tmp/
+.DS_Store
