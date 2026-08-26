@@ -68,7 +68,7 @@ jobs:
 
       - name: Install OpenCode
         shell: bash
-        run: curl --retry 3 --retry-all-errors --retry-delay 15 -fsSL https://opencode.ai/install | bash
+        run: bash .github/scripts/install-opencode-with-retry.sh
 
       - name: Run lane agent with resilient retry
         shell: bash
@@ -226,7 +226,7 @@ jobs:
 
       - name: Install OpenCode
         shell: bash
-        run: curl --retry 3 --retry-all-errors --retry-delay 15 -fsSL https://opencode.ai/install | bash
+        run: bash .github/scripts/install-opencode-with-retry.sh
 
       - name: Integrate and repair
         shell: bash
@@ -286,7 +286,7 @@ jobs:
 
       - name: Install OpenCode
         shell: bash
-        run: curl --retry 3 --retry-all-errors --retry-delay 15 -fsSL https://opencode.ai/install | bash
+        run: bash .github/scripts/install-opencode-with-retry.sh
 
       - name: Audit P0 and claims
         shell: bash
@@ -332,7 +332,7 @@ jobs:
 
       - name: Install OpenCode
         shell: bash
-        run: curl --retry 3 --retry-all-errors --retry-delay 15 -fsSL https://opencode.ai/install | bash
+        run: bash .github/scripts/install-opencode-with-retry.sh
 
       - name: Set evidence-gated factory direction
         shell: bash
