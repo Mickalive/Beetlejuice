@@ -1,0 +1,19 @@
+{
+  "name": "beetlejuice-agentic-finops",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Privacy-first GitHub optimizer for economic cost per successful agentic outcome.",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "test": "node --test",
+    "demo": "node apps/cli/src/demo.js",
+    "audit:synthetic": "node apps/cli/src/demo.js"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
