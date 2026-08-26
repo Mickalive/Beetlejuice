@@ -216,6 +216,84 @@ test('deliveries from other repositories are ignored whole (tenant isolation edg
   assert.equal(res.ignored.reason, 'repository_out_of_scope');
 });
 
+test('completed workflow_job deliveries emit compute evidence via the SAME mapper as sweeps', () => {
+  const { delivered, ignored } = normalizeWebhookDelivery({
+    event: 'workflow_job',
+    action: 'completed',
+    repoConfig,
+    policy,
+    prIndex: ingestedIndex(),
+    payload: {
+      repository: { full_name: `${OWNER}/${REPO}` },
+      workflow_job: {
+        id: 7301,
+        run_id: 9100,
+        run_attempt: 1,
+        status: 'completed',
+        conclusion: 'failure',
+        head_sha: sha.pr102head,
+        started_at: '2026-07-05T10:12:00Z',
+        completed_at: '2026-07-05T10:14:00Z',
+        labels: ['ubuntu-latest'],
+      },
+    },
+  });
+  assert.equal(ignored, undefined);
+  assert.equal(delivered.length, 1);
+  const ev = delivered[0].event;
+  assert.equal(ev.type, 'compute_usage_recorded');
+  assert.equal(ev.task_ref, 't:pr:102'); // bound by head SHA through the shared index
+  assert.equal(ev.execution_ref, `t:pr:102:rev:${sha.pr102head}`);
+  // Event ids match the historical sweep's ids for the same job -> idempotent.
+  assert.equal(ev.event_id, `ev:${SCOPE_KEY}:wfjob:7301`);
+  assert.equal(ev.payload.cost.known, false); // no rate configured in this delivery path
+});
+
+test('non-terminal or foreign-revision workflow_job deliveries defer with reasons', () => {
+  const baseJob = {
+    id: 7302,
+    run_id: 9101,
+    status: 'in_progress',
+    head_sha: sha.pr102head,
+    started_at: '2026-07-05T10:12:00Z',
+  };
+  const queued = normalizeWebhookDelivery({
+    event: 'workflow_job',
+    action: 'queued',
+    repoConfig,
+    policy,
+    prIndex: ingestedIndex(),
+    payload: { repository: { full_name: `${OWNER}/${REPO}` }, workflow_job: baseJob },
+  });
+  assert.equal(queued.delivered.length, 0);
+  assert.equal(queued.ignored.reason, 'unsupported_workflow_job_action:queued');
+
+  const unknownRev = normalizeWebhookDelivery({
+    event: 'workflow_job',
+    action: 'completed',
+    repoConfig,
+    policy,
+    prIndex: ingestedIndex(),
+    payload: {
+      repository: { full_name: `${OWNER}/${REPO}` },
+      workflow_job: { ...baseJob, status: 'completed', conclusion: 'success', head_sha: sha.unrelated },
+    },
+  });
+  assert.equal(unknownRev.ignored.reason, 'workflow_job_revision_unknown_to_ingested_tasks');
+
+  const noIndex = normalizeWebhookDelivery({
+    event: 'workflow_job',
+    action: 'completed',
+    repoConfig,
+    policy,
+    payload: {
+      repository: { full_name: `${OWNER}/${REPO}` },
+      workflow_job: { ...baseJob, status: 'completed', head_sha: sha.pr102head },
+    },
+  });
+  assert.equal(noIndex.ignored.reason, 'workflow_job_deferred_no_task_index_supplied');
+});
+
 test('unknown events and malformed payloads never crash the ingestion surface', () => {
   for (const over of [{ event: 'gollum' }, { payload: null }, { action: 'unlabeled' }]) {
     const res = normalizeWebhookDelivery(delivery(over));

@@ -225,7 +225,10 @@ test('executions mirror observed revisions with honest cost components', () => {
   assert.equal(rev3.started_at, '2026-07-03T11:30:00Z');
   assert.equal(rev3.ended_at, '2026-07-04T08:15:00Z'); // merge time
 
-  // Inference/tools/compute are unobservable read-only: unavailable, never estimated.
+  // Inference/tools are unobservable read-only: unavailable, never estimated.
+  // Compute stays unavailable HERE because this run-level-only cost source
+  // prices nothing at job level (see workflow-jobs.test.js for the measured
+  // compute path via actionsMeasuredCostSource).
   for (const execution of merged.executions) {
     for (const key of ['inference', 'tools', 'compute']) {
       assert.deepEqual(execution.components[key], { basis: 'unavailable', amount_micro_usd: null }, key);
@@ -410,6 +413,7 @@ test('e2e: in-memory GitHub -> collectHistory -> buildNormalizedBundle (no crede
   const commits = fixtureEvidence().commitsByPull;
   const runs = fixtureEvidence().workflowRuns;
   const checks = fixtureEvidence().checkRunsBySha;
+  const jobs = fixtureEvidence().workflowJobsByRunAttempt;
 
   const seenMethods = [];
   const client = createGithubRestClient({
@@ -424,9 +428,18 @@ test('e2e: in-memory GitHub -> collectHistory -> buildNormalizedBundle (no crede
           ? (commits.get(Number(p.match(/(\d+)\/commits$/)[1])) ?? [])
           : p.endsWith('/actions/runs')
             ? { workflow_runs: runs }
-            : /\/commits\/([0-9a-f]+)\/check-runs$/.test(p)
-              ? { check_runs: checks.get(p.match(/commits\/([0-9a-f]+)\/check-runs$/)[1]) ?? [] }
-              : null;
+            : /\/actions\/runs\/(\d+)\/jobs$/.test(p)
+              ? (() => {
+                  const runId = Number(p.match(/runs\/(\d+)\/jobs$/)[1]);
+                  const list =
+                    jobs.get(`${runId}@a1`) ??
+                    [...jobs.entries()].find(([key]) => key.startsWith(`${runId}@`))?.[1] ??
+                    [];
+                  return { jobs: list, total_count: list.length };
+                })()
+              : /\/commits\/([0-9a-f]+)\/check-runs$/.test(p)
+                ? { check_runs: checks.get(p.match(/commits\/([0-9a-f]+)\/check-runs$/)[1]) ?? [] }
+                : null;
       return { status: json === null ? 404 : 200, headers: {}, json };
     },
   });

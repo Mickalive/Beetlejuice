@@ -21,7 +21,10 @@
  *     amount_micro_usd: null }`, never estimated.
  *   - CI/validation cost is `measured` only where the configured cost source
  *     resolves known money (operator-supplied Actions usage + explicit rate);
- *     otherwise the component stays unavailable.
+ *     otherwise the component stays unavailable. Compute cost is measured the
+ *     same way from collected Actions JOB timing (the billed unit) when an
+ *     explicit rate is configured; attempts already covered by a run-level
+ *     usage record resolve to unknown instead of double-counting.
  *   - Revision succession is NOT waste evidence. A replaced head revision is
  *     normal iteration; this producer therefore emits NO
  *     `superseded_by_execution_id` / `retry_of_execution_id` relations from
@@ -49,10 +52,11 @@
  */
 import { repoScope } from './refs.js';
 import { normalizePolicy, classifyPullRequest } from './policy.js';
-import { unknownEverythingCostSource } from './cost-source.js';
+import { unavailableEvidenceCostSource } from './cost-source.js';
 import { mapPullRequestTask } from './map/pr-tasks.js';
 import { buildPrIndex } from './map/pr-index.js';
 import { correlateWorkflowRun, mapWorkflowRun, mapCheckRuns } from './map/ci-evidence.js';
+import { mapWorkflowJobs, workflowRunAttemptKey } from './map/workflow-jobs.js';
 import { ADAPTER_ID, COLLECTOR_VERSION, NORMALIZATION_VERSION } from './versions.js';
 
 /** Canonical normalized-input schema version this producer targets (seam A). */
@@ -81,12 +85,24 @@ export function buildNormalizedBundle(evidence, opts = {}) {
   }
   const scope = repoScope(evidence.scope);
   const policy = normalizePolicy(opts.policy ?? evidence.policy ?? {});
-  const costSource = opts.costSource ?? unknownEverythingCostSource();
+  const costSource = opts.costSource ?? unavailableEvidenceCostSource();
+  const jobsByRunAttempt =
+    evidence.workflowJobsByRunAttempt instanceof Map
+      ? evidence.workflowJobsByRunAttempt
+      : objToEntries(evidence.workflowJobsByRunAttempt);
 
   // --- Pass 1: ingest PRs into task skeletons (same mapper as the audit) -----
   /** @type {Array<{entry:object, pr:object, revisions:Array}>} */
   const skeletons = [];
   const stats = newBundleStats();
+
+  /** taskRef -> revisionSha -> microUsd */
+  const revisionCost = new Map();
+  /** taskRef -> microUsd of known money no revision could provably hold */
+  const taskLevelCost = new Map();
+  /** Same two buckets for compute money coming from Actions job timing. */
+  const revisionComputeCost = new Map();
+  const taskLevelComputeCost = new Map();
 
   const pullsSorted = [...(evidence.prs ?? [])].sort((a, b) => Number(a.number) - Number(b.number));
   for (const pr of pullsSorted) {
@@ -120,14 +136,9 @@ export function buildNormalizedBundle(evidence, opts = {}) {
   }
   const prIndex = buildPrIndex(skeletons.map((s) => s.entry));
 
-  // --- Pass 2: attach known CI/validation money per (task, revision) ----------
+  // --- Pass 2: attach known CI/validation/compute money per (task, revision) --
   // Buckets mirror the event mappers' binding decisions exactly, because they
   // are derived from the very records those mappers emit.
-  /** taskRef -> revisionSha -> microUsd */
-  const revisionCost = new Map();
-  /** taskRef -> microUsd of known money no revision could provably hold */
-  const taskLevelCost = new Map();
-
   const runsSorted = [...(evidence.workflowRuns ?? [])].sort(
     (a, b) => Number(a?.id) - Number(b?.id) || Number(a?.run_attempt ?? 1) - Number(b?.run_attempt ?? 1)
   );
@@ -138,6 +149,48 @@ export function buildNormalizedBundle(evidence, opts = {}) {
       bump(stats.ci_runs_excluded_by_reason, correlation.reason);
       continue;
     }
+
+    // Compute money from correlated runs' jobs — gated on correlation only,
+    // mirroring the event assembler so both seams stay decision-identical.
+    const jobs = jobsByRunAttempt.get(workflowRunAttemptKey(run));
+    if (jobs !== undefined) {
+      stats.workflow_jobs_seen += Array.isArray(jobs) ? jobs.length : 0;
+      const jmapped = mapWorkflowJobs({
+        run,
+        jobs,
+        task: correlation.task,
+        scope,
+        costSource,
+        linkConfidence: correlation.confidence,
+      });
+      stats.workflow_jobs_emitted += jmapped.records.length;
+      stats.workflow_jobs_pending_not_terminal += jmapped.pending;
+      for (const ex of jmapped.excluded) bump(stats.workflow_jobs_excluded_by_reason, ex.reason);
+      for (const { event } of jmapped.records) {
+        const jcost = event.payload?.cost;
+        if (!jcost || jcost.known !== true) {
+          stats.compute_cost_unknown += 1;
+          continue;
+        }
+        stats.compute_cost_known += 1;
+        // Mirror mapWorkflowJobs' binding condition exactly: money binds to
+        // the revision iff the run head SHA is a known revision of this task.
+        const headSha = typeof run.head_sha === 'string' ? run.head_sha : null;
+        const revisionKey =
+          headSha !== null && correlation.task.executionRefByRevision.has(headSha) ? headSha : null;
+        placeKnownCost({
+          taskRef: event.task_ref,
+          revisionKey,
+          entry: prIndex.byNumber.get(correlation.task.prNumber),
+          microUsd: jcost.micro_usd,
+          revisionCost: revisionComputeCost,
+          taskLevelCost: taskLevelComputeCost,
+          stats,
+          kind: 'compute',
+        });
+      }
+    }
+
     const mapped = mapWorkflowRun({ run, correlation, scope, costSource });
     if (mapped.pending) {
       stats.ci_runs_pending_not_terminal += 1;
@@ -199,7 +252,14 @@ export function buildNormalizedBundle(evidence, opts = {}) {
   // --- Pass 3: emit one record per ingested task ------------------------------
   const records = [];
   for (const skeleton of skeletons) {
-    const record = buildRecord({ ...skeleton, revisionCost, taskLevelCost, stats });
+    const record = buildRecord({
+      ...skeleton,
+      revisionCost,
+      taskLevelCost,
+      revisionComputeCost,
+      taskLevelComputeCost,
+      stats,
+    });
     if (record) records.push(record);
     else stats.prs_excluded_missing_start += 1;
   }
@@ -215,7 +275,7 @@ export function buildNormalizedBundle(evidence, opts = {}) {
 
 // --- record assembly -----------------------------------------------------------
 
-function buildRecord({ entry, pr, revisions, revisionCost, taskLevelCost, stats }) {
+function buildRecord({ entry, pr, revisions, revisionCost, taskLevelCost, revisionComputeCost, taskLevelComputeCost, stats }) {
   const createdAt = isoOrNull(pr?.created_at);
   const closedAt = isoOrNull(pr?.closed_at);
   const mergedAt = isoOrNull(pr?.merged_at);
@@ -228,6 +288,8 @@ function buildRecord({ entry, pr, revisions, revisionCost, taskLevelCost, stats 
 
   const revCosts = revisionCost.get(entry.taskRef);
   const unassignedMicroUsd = taskLevelCost.get(entry.taskRef) ?? 0;
+  const revComputeCosts = revisionComputeCost.get(entry.taskRef);
+  const unassignedComputeMicroUsd = taskLevelComputeCost.get(entry.taskRef) ?? 0;
 
   const executions = [];
   for (let i = 0; i < revisions.length; i += 1) {
@@ -244,6 +306,13 @@ function buildRecord({ entry, pr, revisions, revisionCost, taskLevelCost, stats 
       stats.ci_cost_task_level_rollup_components += 1;
       stats.ci_cost_task_level_rollup_micro_usd_total += rollup;
     }
+    const ownCompute = revComputeCosts?.get(rev.sha) ?? 0;
+    const computeRollup = isLast ? unassignedComputeMicroUsd : 0;
+    const computeTotal = ownCompute + computeRollup;
+    if (computeRollup > 0) {
+      stats.compute_cost_task_level_rollup_components += 1;
+      stats.compute_cost_task_level_rollup_micro_usd_total += computeRollup;
+    }
     executions.push(
       executionJson({
         executionId: rev.executionRef,
@@ -251,6 +320,7 @@ function buildRecord({ entry, pr, revisions, revisionCost, taskLevelCost, stats 
         startedAt: rev.committedAt,
         endedAt: isLast ? endedAt : nextStartTime(revisions, i),
         ciMicroUsd: ciTotal > 0 ? ciTotal : null,
+        computeMicroUsd: computeTotal > 0 ? computeTotal : null,
       })
     );
   }
@@ -261,6 +331,7 @@ function buildRecord({ entry, pr, revisions, revisionCost, taskLevelCost, stats 
   if (executions.length === 0) {
     stats.executions_span_fallback += 1;
     const spanCi = revCostsTotal(revCosts) + unassignedMicroUsd;
+    const spanCompute = revCostsTotal(revComputeCosts) + unassignedComputeMicroUsd;
     executions.push(
       executionJson({
         executionId: `${entry.taskRef}:span`,
@@ -268,6 +339,7 @@ function buildRecord({ entry, pr, revisions, revisionCost, taskLevelCost, stats 
         startedAt,
         endedAt,
         ciMicroUsd: spanCi > 0 ? spanCi : null,
+        computeMicroUsd: spanCompute > 0 ? spanCompute : null,
       })
     );
   }
@@ -284,7 +356,7 @@ function buildRecord({ entry, pr, revisions, revisionCost, taskLevelCost, stats 
   };
 }
 
-function executionJson({ executionId, agentFamily, startedAt, endedAt, ciMicroUsd }) {
+function executionJson({ executionId, agentFamily, startedAt, endedAt, ciMicroUsd, computeMicroUsd = null }) {
   const components = {
     inference: { basis: 'unavailable', amount_micro_usd: null },
     tools: { basis: 'unavailable', amount_micro_usd: null },
@@ -292,7 +364,10 @@ function executionJson({ executionId, agentFamily, startedAt, endedAt, ciMicroUs
       ciMicroUsd === null
         ? { basis: 'unavailable', amount_micro_usd: null }
         : { basis: 'measured', amount_micro_usd: ciMicroUsd },
-    compute: { basis: 'unavailable', amount_micro_usd: null },
+    compute:
+      computeMicroUsd === null
+        ? { basis: 'unavailable', amount_micro_usd: null }
+        : { basis: 'measured', amount_micro_usd: computeMicroUsd },
   };
   let total = 0;
   for (const key of COMPONENT_KEYS) {
@@ -319,6 +394,7 @@ function placeKnownCost({ taskRef, revisionKey, entry, microUsd, revisionCost, t
     perTask.set(revisionKey, (perTask.get(revisionKey) ?? 0) + microUsd);
     revisionCost.set(taskRef, perTask);
     if (kind === 'ci') stats.ci_cost_bound_to_revision_micro_usd_total += microUsd;
+    else if (kind === 'compute') stats.compute_cost_bound_to_revision_micro_usd_total += microUsd;
     else stats.validation_cost_bound_to_revision_micro_usd_total += microUsd;
     return;
   }
@@ -331,6 +407,7 @@ function placeKnownCost({ taskRef, revisionKey, entry, microUsd, revisionCost, t
   }
   taskLevelCost.set(taskRef, (taskLevelCost.get(taskRef) ?? 0) + microUsd);
   if (kind === 'ci') stats.ci_cost_task_level_micro_usd_total += microUsd;
+  else if (kind === 'compute') stats.compute_cost_task_level_micro_usd_total += microUsd;
   else stats.validation_cost_task_level_micro_usd_total += microUsd;
 }
 
@@ -373,6 +450,12 @@ function newBundleStats() {
     ci_runs_cost_known: 0,
     ci_runs_cost_unknown: 0,
     ci_runs_excluded_by_reason: {},
+    workflow_jobs_seen: 0,
+    workflow_jobs_emitted: 0,
+    workflow_jobs_pending_not_terminal: 0,
+    workflow_jobs_excluded_by_reason: {},
+    compute_cost_known: 0,
+    compute_cost_unknown: 0,
     validation_records_seen: 0,
     validation_records_pending_not_terminal: 0,
     validation_cost_known: 0,
@@ -382,6 +465,10 @@ function newBundleStats() {
     ci_cost_task_level_micro_usd_total: 0,
     ci_cost_task_level_rollup_components: 0,
     ci_cost_task_level_rollup_micro_usd_total: 0,
+    compute_cost_bound_to_revision_micro_usd_total: 0,
+    compute_cost_task_level_micro_usd_total: 0,
+    compute_cost_task_level_rollup_components: 0,
+    compute_cost_task_level_rollup_micro_usd_total: 0,
     validation_cost_bound_to_revision_micro_usd_total: 0,
     validation_cost_task_level_micro_usd_total: 0,
     cost_dropped_unattributable: 0,
@@ -389,8 +476,9 @@ function newBundleStats() {
 }
 
 const FIXED_BUNDLE_NOTES = Object.freeze([
-  'inference/tools/compute spend is not observable through read-only GitHub evidence; components are unavailable, never estimated',
-  'ci/validation cost is measured only where the configured cost source resolves known money; otherwise unavailable',
+  'inference/tools spend is not observable through read-only GitHub evidence; those components are unavailable, never estimated',
+  'ci/compute cost is measured only where the configured cost source resolves known money (Actions usage records or collected job timing times an explicit rate); otherwise unavailable',
+  'job-level money for an attempt already covered by a run-level usage record resolves to unknown instead of double-counting',
   "known cost whose revision binding is unprovable rolls up to its own task's final execution so totals stay complete without inventing bindings",
   'no superseded/retry relations are emitted from bare revision succession: normal iteration is not certain waste',
 ]);
@@ -401,6 +489,7 @@ function finalizeStats(stats, evidence) {
   if (trunc?.pullRequests) notes.push('pull-request sweep hit maxPrPages; results are a bounded sweep');
   if (trunc?.workflowRuns) notes.push('workflow-run sweep hit maxRunPages; results are a bounded sweep');
   if (trunc?.checkShas) notes.push('check-run probing hit maxCheckShaCount; some revisions were not probed');
+  if (trunc?.jobs) notes.push('Actions job listing hit maxJobPagesPerRun on at least one run; some jobs were not probed');
   return { ...stats, notes };
 }
 

@@ -6,7 +6,9 @@
  *   2. classify each PR with the operator policy (measured/inferred/excluded);
  *   3. for ingested PRs, fetch the PR commit list (revision evidence);
  *   4. list Actions workflow runs;
- *   5. fetch check-runs per distinct revision SHA of ingested PRs.
+ *   5. fetch check-runs per distinct revision SHA of ingested PRs;
+ *   6. for runs that CORRELATE to an ingested task, fetch Actions job lists
+ *      (the billed unit) — never for foreign-branch runs.
  *
  * The result is an inert `RawEvidence` structure — plain JSON-shaped data —
  * that `assembleAudit()` maps into canonical events. Collection and mapping
@@ -17,12 +19,14 @@ import { createGithubRestClient, paginate } from './client.js';
 import { repoScope } from '../refs.js';
 import { normalizePolicy, classifyPullRequest } from '../policy.js';
 import { invalidConfig } from '../errors.js';
+import { correlateWorkflowRun } from '../map/ci-evidence.js';
 
 export const DEFAULT_LIMITS = Object.freeze({
   maxPrPages: 5,
   maxRunPages: 10,
   maxCommitPagesPerPr: 2,
   maxCheckShaCount: 40,
+  maxJobPagesPerRun: 2,
 });
 
 /**
@@ -100,7 +104,40 @@ export async function collectHistory({ repoConfig, policy, client, token, fetchI
     if (Array.isArray(runs)) workflowRuns.push(...runs);
   }
 
-  // 5. Check runs per known revision SHA ---------------------------------------
+  // 5. Actions jobs for CORRELATED runs only ------------------------------------
+  // Data minimization: jobs are fetched exclusively for workflow runs that
+  // correlate to an INGESTED agentic task, using the SAME correlateWorkflowRun
+  // function and an equivalent index shape as the assembler (parity contract:
+  // the fetch decision must never diverge from the emission decision — pinned
+  // by test/workflow-jobs.test.js). Foreign-branch runs get no job request.
+  // Attempts share one run id; the jobs endpoint reflects the latest attempt,
+  // so each run id is fetched at most once and stored under its first-seen
+  // attempt key.
+  const correlationIndex = lightCorrelationIndex(prs, prClassifications, commitsByPull, pol);
+  const jobsByRunAttempt = new Map();
+  const seenRunIds = new Set();
+  let truncatedJobs = false;
+  for (const run of workflowRuns) {
+    const runId = Number(run?.id);
+    if (!Number.isInteger(runId) || seenRunIds.has(runId)) continue;
+    const correlation = correlateWorkflowRun(run, correlationIndex);
+    if (correlation.noTask) continue;
+    seenRunIds.add(runId);
+    const jobs = [];
+    let pages = 0;
+    for await (const page of paginate(
+      (path, params) => track(`list_workflow_jobs:${runId}`, path, params),
+      `/repos/${scope.owner}/${scope.repo}/actions/runs/${runId}/jobs`,
+      { query: {}, maxPages: lim.maxJobPagesPerRun }
+    )) {
+      pages += 1;
+      if (Array.isArray(page.json?.jobs)) jobs.push(...page.json.jobs);
+    }
+    if (pages >= lim.maxJobPagesPerRun && jobs.length > 0) truncatedJobs = true;
+    jobsByRunAttempt.set(`${runId}@a${attemptOfRun(run)}`, jobs);
+  }
+
+  // 6. Check runs per known revision SHA ---------------------------------------
   // Data minimization: we probe ONLY revisions of INGESTED agentic PRs.
   // Check-run evidence for foreign branches cannot be attached to a canonical
   // task, so fetching it would collect out-of-scope data for no product use.
@@ -119,6 +156,7 @@ export async function collectHistory({ repoConfig, policy, client, token, fetchI
     prClassifications,
     commitsByPull,
     workflowRuns,
+    workflowJobsByRunAttempt: jobsByRunAttempt,
     checkRunsBySha,
     collection: Object.freeze({
       requests: Object.freeze(requests.slice()),
@@ -127,9 +165,43 @@ export async function collectHistory({ repoConfig, policy, client, token, fetchI
         pullRequests: prs.length > 0 && requests.filter((r) => r === 'list_pulls').length >= lim.maxPrPages,
         workflowRuns: workflowRuns.length > 0 && requests.filter((r) => r === 'list_workflow_runs').length >= lim.maxRunPages,
         checkShas: distinctRevisionShas(commitsByPull).length > shas.length,
+        jobs: truncatedJobs,
       }),
     }),
   });
+}
+
+/**
+ * Lightweight correlation index over the collected pulls. Entries carry only
+ * the fields correlateWorkflowRun() reads (prNumber, headBranch, revisionShas)
+ * and are ordered by ascending PR number exactly like buildPrIndex(), so the
+ * collector's fetch decision matches the assembler's emission decision.
+ */
+function lightCorrelationIndex(prs, prClassifications, commitsByPull, policy) {
+  const byNumber = new Map();
+  const byHeadBranch = new Map();
+  const sorted = [...(prs ?? [])].sort((a, b) => Number(a.number) - Number(b.number));
+  for (const pr of sorted) {
+    const cls =
+      (prClassifications instanceof Map ? prClassifications.get(pr.number) : undefined) ??
+      classifyPullRequest(pr, policy);
+    if (!cls?.agentic) continue;
+    const shas = new Set(
+      ((commitsByPull instanceof Map ? commitsByPull.get(pr.number) : commitsByPull?.[pr.number]) ?? [])
+        .map((c) => c?.sha)
+        .filter((s) => typeof s === 'string' && s.length >= 7)
+    );
+    const entry = {
+      prNumber: Number(pr.number),
+      headBranch: String(pr?.head?.ref ?? ''),
+      revisionShas: shas,
+    };
+    byNumber.set(entry.prNumber, entry);
+    const list = byHeadBranch.get(entry.headBranch) ?? [];
+    list.push(entry);
+    byHeadBranch.set(entry.headBranch, list);
+  }
+  return { byNumber, byHeadBranch };
 }
 
 /** Distinct revision SHAs of ingested PRs, stable order (PR asc, commit order). */
@@ -155,4 +227,9 @@ function validateLimits(limits) {
     }
   }
   return Object.freeze(merged);
+}
+
+function attemptOfRun(run) {
+  const attempt = Number(run?.run_attempt);
+  return Number.isInteger(attempt) && attempt > 0 ? attempt : 1;
 }

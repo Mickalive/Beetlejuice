@@ -16,13 +16,14 @@
  * webhook + sweep re-ingestion safe.
  */
 import { repoScope } from '../refs.js';
-import { normalizePolicy } from '../policy.js';
-import { unknownEverythingCostSource } from '../cost-source.js';
+import { normalizePolicy, LINK_INFERRED } from '../policy.js';
+import { unavailableEvidenceCostSource } from '../cost-source.js';
 import { githubSource, conformCanonicalEvent } from '../canonical.js';
 import { taskRefForPr, prRefFor, apiRef, eventId } from '../refs.js';
 import { correlateWorkflowRun, mapWorkflowRun, mapCheckRuns } from '../map/ci-evidence.js';
+import { mapWorkflowJobs } from '../map/workflow-jobs.js';
 
-const SUPPORTED_EVENTS = Object.freeze(['pull_request', 'workflow_run', 'check_run']);
+const SUPPORTED_EVENTS = Object.freeze(['pull_request', 'workflow_run', 'check_run', 'workflow_job']);
 
 /**
  * Normalize one VERIFIED delivery (callers must verify the signature first;
@@ -42,7 +43,7 @@ const SUPPORTED_EVENTS = Object.freeze(['pull_request', 'workflow_run', 'check_r
 export function normalizeWebhookDelivery({ event, action, payload, repoConfig, policy, costSource, prIndex }) {
   const scope = repoScope(repoConfig);
   const pol = normalizePolicy(policy);
-  const costs = costSource ?? unknownEverythingCostSource();
+  const costs = costSource ?? unavailableEvidenceCostSource();
 
   if (!SUPPORTED_EVENTS.includes(event)) {
     return { delivered: [], ignored: { reason: `unsupported_event:${event}` } };
@@ -68,6 +69,8 @@ export function normalizeWebhookDelivery({ event, action, payload, repoConfig, p
       return handleWorkflowRun({ payload, action, scope, costs, prIndex });
     case 'check_run':
       return handleCheckRun({ payload, action, scope, costs, prIndex });
+    case 'workflow_job':
+      return handleWorkflowJob({ payload, action, scope, costs, prIndex });
     default:
       return { delivered: [], ignored: { reason: `unsupported_event:${event}` } };
   }
@@ -186,6 +189,64 @@ function handleCheckRun({ payload, action, scope, costs, prIndex }) {
     mapped.pending > 0
       ? 'check_run_not_terminal'
       : mapped.excluded[0]?.reason ?? 'check_run_revision_unknown_to_ingested_tasks';
+  return { delivered: [], ignored: { reason } };
+}
+
+// --- workflow_job ----------------------------------------------------------------
+
+/**
+ * A completed `workflow_job` delivery is compute evidence bound by head SHA,
+ * exactly like check runs. The SAME mapper as the historical sweep is used
+ * with a run-shaped wrapper, and the event id depends only on the globally
+ * unique job id — so a delivery and a later sweep produce identical events
+ * (idempotent re-ingestion). Non-completed actions are deferred: timing that
+ * only exists at completion must not be guessed.
+ */
+function handleWorkflowJob({ payload, action, scope, costs, prIndex }) {
+  if (action !== 'completed') {
+    return { delivered: [], ignored: { reason: `unsupported_workflow_job_action:${action}` } };
+  }
+  const job = payload?.workflow_job;
+  if (!job || typeof job !== 'object') {
+    return { delivered: [], ignored: { reason: 'malformed_payload' } };
+  }
+  const sha = typeof job.head_sha === 'string' ? job.head_sha : null;
+  if (!sha) {
+    return { delivered: [], ignored: { reason: 'workflow_job_missing_head_sha' } };
+  }
+  const runId = Number(job.run_id);
+  if (!Number.isInteger(runId) || runId <= 0) {
+    return { delivered: [], ignored: { reason: 'workflow_job_missing_run_id' } };
+  }
+  if (!prIndex) {
+    return { delivered: [], ignored: { reason: 'workflow_job_deferred_no_task_index_supplied' } };
+  }
+  const owners = prIndex.byRevision.get(sha) ?? [];
+  if (owners.length === 0) {
+    return { delivered: [], ignored: { reason: 'workflow_job_revision_unknown_to_ingested_tasks' } };
+  }
+  const task = owners[0]; // deterministic: lowest PR number first (check-run convention)
+  const attempt = Number(job.run_attempt);
+  const runWrapper = {
+    id: runId,
+    run_attempt: Number.isInteger(attempt) && attempt > 0 ? attempt : 1,
+    head_sha: sha,
+  };
+  const mapped = mapWorkflowJobs({
+    run: runWrapper,
+    jobs: [job],
+    task,
+    scope,
+    costSource: costs,
+    linkConfidence: LINK_INFERRED,
+  });
+  if (mapped.records.length > 0) {
+    return { delivered: mapped.records.map((r, i) => ({ _order: i, event: r.event })) };
+  }
+  const reason =
+    mapped.pending > 0
+      ? 'workflow_job_not_terminal'
+      : mapped.excluded[0]?.reason ?? 'workflow_job_not_mappable';
   return { delivered: [], ignored: { reason } };
 }
 
