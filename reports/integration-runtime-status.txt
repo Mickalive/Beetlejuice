@@ -1,2 +1,118 @@
-integration_test_rc=0
-demo_rc=1
+BEETLEJUICE — INTEGRATION RUNTIME STATUS
+Cycle: 32936499446
+Branch: lab/integration
+Date: 2026-08-26
+Author: integration_director
+
+=======================================================================
+WHAT LANES SHIPPED THIS CYCLE (all merged, zero conflicts)
+=======================================================================
+core    @ 9964d4d : X1 repair (dup-CI guard G5: any non-passed run poisons its
+                   equivalence-key×revision partition) + negative regressions
+                   (exact E14 replica, cancelled/timed_out variants, pre-pass
+                   disagreement, sibling-partition scoping)
+github  @ 8a43ded : A7 producer — buildNormalizedBundle() emits the schema-v2
+                   normalized envelope from collected evidence; 12-test suite
+                   incl. credential-free e2e
+privacy @ 1e0ba4c : A10 producer — mapAuditTaskToPrivacyInput() bridges core
+                   audit aggregates into the fail-closed gate; 520-line
+                   round-trip suite over realistic aggregate shapes
+product @ 05b6ec9 : A9 closure — committed cross-package-seam.test.js e2e
+                   (github -> core -> product), skips explicitly when lanes
+                   are absent; consumer-side bundle helper
+
+Integration merge: 4x clean (ort strategy), zero conflicts.
+
+=======================================================================
+INTEGRATION REPAIRS ON TOP (this branch, this cycle)
+=======================================================================
+1. A11 (P0 #7): apps/cli/src/github_mode.js + demo.js --github OWNER/REPO.
+   One committed token+repo -> report command through the canonical-core seam.
+   Honesty contracts: missing token exit 2 (verified live), upstream failure
+   exit 3 (verified live against real api.github.com), credential never echoed
+   (test-pinned), mode labeled real-github-read-only.
+2. A7 cross-producer regression: test/integration/github-bundle-input-seam.test.js
+   feeds an ADAPTER-built v2 envelope through runCli --input (exit 0, $0.232
+   measured flows through verbatim).
+3. A10 cross-package round-trip: test/integration/privacy-audit-producer.test.mjs
+   runs REAL TenantLedger.audit() output through mapAuditTaskToPrivacyInput ->
+   normalizeTenantRecord -> exportGlobalLearningRecords. Proves identifiers are
+   stripped, cohort floor suppresses a small tenant's records, two tenants with
+   identical economics produce byte-identical records, poisoned hints/keys
+   reject fail-closed.
+4. A6/R6: .github/workflows/ci.yml test-count guard now prunes .opencode and
+   nested node_modules (vendored trees counted 147/149 files before); floor
+   raised to 20 first-party files (actual count on this tree: 57).
+5. README quickstart rewritten: synthetic demo vs real modes clearly
+   distinguished; apps/cli docs updated to match runtime.
+
+=======================================================================
+EXECUTED VERIFICATION EVIDENCE (commands + results, this tree)
+=======================================================================
+E1  npm install --ignore-scripts            -> exit 0
+E2  npm test                                -> # tests 363 / # pass 363 /
+                                               # fail 0 / # skipped 0
+E3  npm run demo                            -> exit 0, economics-first report,
+                                               $28.57 measured / 2 accepted /
+                                               $15.09 per outcome / $8.99
+                                               certainly avoidable
+E4  npm run demo x2 -> diff -r outputs      -> byte-identical (deterministic)
+E5  node --test packages/core/test/waste-dup-ci.test.js
+                                            -> 13/13 incl. X1 negative control
+E6  node --test test/integration/*.test.*   -> 11/11 pass, 0 skipped
+E7  node scripts/live-github-audit-probe.mjs
+    (LIVE api.github.com, public repo eubby06/kids-store, NO credentials)
+       live GET requests: 18 (GET-only enforced client-side)
+       6 PRs -> 45 canonical AGENTIC_TASK events
+       outcomes: 4 accepted / 0 failed / 0 aborted / 2 unresolved
+       certain-waste findings on REAL history: F-001..F-005
+         (WASTE_EXEC_SUPERSEDED_V1 class, unknown-cost units stay $0 +
+          explicitly unquantified — never invented money)
+       cost components honestly unavailable (no billing evidence supplied)
+       report mode label: real-github-read-only
+E8  BEETLEJUICE_GITHUB_TOKEN="" node apps/cli/src/demo.js --github o/r
+                                            -> exit 2, setup guidance, no fake
+E9  BEETLEJUICE_GITHUB_TOKEN=fake  node apps/cli/src/demo.js --github o/r
+                                            -> real TLS call to api.github.com,
+                                               honest failure, exit 3
+E10 CI guard find (fixed) run locally       -> 57 first-party test files >= 20
+E11 github bundle -> CLI --input (costed fixture source)
+                                            -> exit 0, $0.232 measured verbatim
+E12 privacy gate on real ledger output      -> 10/10 mapped+normalized, export
+                                               suppresses all 10 below cohort
+                                               floor k=5 (correct: single small
+                                               tenant), rejected=0, purpose/
+                                               license gates hold
+
+=======================================================================
+P0 SCORECARD (docs/PRODUCT_OBJECTIVE.md items 1-12)
+=======================================================================
+1  canonical_agentic_task        PASS  (packages/core mounted; versioned
+                                       events; adapter-extensibility suite)
+2  github_fixture_ingestion      PASS  (fixture e2e + committed cross-package
+                                       seam + LIVE api.github.com ingestion)
+3  cost_accounting               PASS  (identity tests; balanced ledgers
+                                       enforced producer & consumer side)
+4  outcome_attribution           PASS  (conservative mapping tests; live
+                                       probe attribution correct)
+5  certain_waste_detector        PASS  (X1 repaired + regression; findings
+                                       carry evidence refs/units; live repo
+                                       produced 5 certain findings)
+6  synthetic_demo                PASS  (exit 0, deterministic, no creds)
+7  real_read_only_github_mode    PASS  (committed --github OWNER/REPO;
+                                       honest refusal paths; full pipeline
+                                       proven against LIVE public repo)
+8  economic_product_surface      PASS  (headline economics lead; tokens
+                                       secondary only; savings traceable)
+9  privacy_safe_global_export    PASS  (gate battery + real-ledger
+                                       round-trip + unlinkability checks)
+10 critical_tests                PASS  (363/363 in one suite, 0 skipped)
+11 quickstart_docs               PASS  (README + CLI docs match runtime)
+12 integration_ci_green          PENDING PUSH (all four CI steps executed
+                                       green locally on the exact commit:
+                                       install, guard 57>=20, npm test 363,
+                                       demo exit 0; remote Actions run is
+                                       the remaining mechanical confirmation)
+
+Score: 11/12 PASS on the mounted candidate; #12 closes when the pushed
+workflow run completes green (identical steps already executed here).
