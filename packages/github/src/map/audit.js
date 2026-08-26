@@ -12,15 +12,17 @@
  *    operator supplied usage, explicitly unknown otherwise).
  */
 import { normalizePolicy, classifyPullRequest } from '../policy.js';
-import { unknownEverythingCostSource } from '../cost-source.js';
+import { unavailableEvidenceCostSource } from '../cost-source.js';
 import { entryForPullRequest, buildPrIndex } from './pr-index.js';
 import { correlateWorkflowRun, mapWorkflowRun, mapCheckRuns } from './ci-evidence.js';
+import { mapWorkflowJobs, workflowRunAttemptKey } from './workflow-jobs.js';
 
 const TYPE_RANK = Object.freeze({
   task_started: 0,
   pull_request_created: 1,
   execution_started: 2,
   ci_run_recorded: 3,
+  compute_usage_recorded: 35,
   validation_recorded: 4,
   pull_request_closed: 5,
   pull_request_merged: 6,
@@ -39,7 +41,11 @@ const TYPE_RANK = Object.freeze({
 export function assembleAudit(evidence, opts = {}) {
   const scope = evidence.scope;
   const policy = normalizePolicy(opts.policy ?? evidence.policy ?? {});
-  const costSource = opts.costSource ?? unknownEverythingCostSource();
+  const costSource = opts.costSource ?? unavailableEvidenceCostSource();
+  const jobsByRunAttempt =
+    evidence.workflowJobsByRunAttempt instanceof Map
+      ? evidence.workflowJobsByRunAttempt
+      : objToEntries(evidence.workflowJobsByRunAttempt);
 
   const prIndex = { byNumber: new Map(), byHeadBranch: new Map(), byRevision: new Map() };
   const records = [];
@@ -83,6 +89,32 @@ export function assembleAudit(evidence, opts = {}) {
       continue;
     }
     if (correlation.multiLink) counts.workflow_runs_multi_link_resolved += 1;
+
+    // Jobs of a CORRELATED run are compute evidence in their own right: they
+    // carry money even when the run-level CI record is pending or its
+    // conclusion is unmapped, because compute was consumed regardless.
+    // Gating on correlation alone (not run mapping) is deliberate and keeps
+    // the collector's data-minimized fetch decision identical to emission.
+    const jobs = jobsByRunAttempt.get(workflowRunAttemptKey(run));
+    if (jobs !== undefined) {
+      counts.workflow_jobs_seen += Array.isArray(jobs) ? jobs.length : 0;
+      const jmapped = mapWorkflowJobs({
+        run,
+        jobs,
+        task: correlation.task,
+        scope,
+        costSource,
+        linkConfidence: correlation.confidence,
+      });
+      records.push(...jmapped.records);
+      counts.workflow_jobs_emitted += jmapped.records.length;
+      counts.workflow_jobs_pending_not_terminal += jmapped.pending;
+      for (const ex of jmapped.excluded) bump(counts.workflow_jobs_excluded_by_reason, ex.reason);
+      for (const { event } of jmapped.records) {
+        if (event.payload?.cost?.known === true) counts.workflow_jobs_cost_known += 1;
+        else counts.workflow_jobs_cost_unknown += 1;
+      }
+    }
 
     const mapped = mapWorkflowRun({ run, correlation, scope, costSource });
     if (mapped.pending) {
@@ -159,6 +191,12 @@ function initCounts() {
     workflow_runs_linked_explicit: 0,
     workflow_runs_linked_inferred: 0,
     workflow_runs_excluded_by_reason: {},
+    workflow_jobs_seen: 0,
+    workflow_jobs_emitted: 0,
+    workflow_jobs_pending_not_terminal: 0,
+    workflow_jobs_cost_known: 0,
+    workflow_jobs_cost_unknown: 0,
+    workflow_jobs_excluded_by_reason: {},
     check_runs_seen: 0,
     check_runs_emitted: 0,
     check_runs_pending_not_terminal: 0,
@@ -185,6 +223,7 @@ function summarizeCosts(events) {
 const FIXED_NOTES = Object.freeze([
   'model/tool invocation spend is not observable through read-only GitHub evidence; it is never estimated here',
   'CI cost is measured only when the operator supplies Actions usage records plus an explicit rate; otherwise unknown with reason',
+  'Actions job (compute) money is measured only when job timing was collected AND an explicit rate was configured; attempts covered by a run-level usage record resolve to unknown instead of double-counting',
 ]);
 
 function buildNotes(evidence) {

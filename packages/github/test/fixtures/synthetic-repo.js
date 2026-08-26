@@ -272,6 +272,123 @@ export function fixtureUsageRecords() {
 
 export const FIXTURE_RATE_USD_PER_MINUTE = 0.008;
 
+// --- Workflow jobs (the unit Actions actually bills) -----------------------------
+
+export function workflowJobJson({
+  id,
+  name,
+  status = 'completed',
+  startedAt,
+  completedAt = null,
+  labels = ['ubuntu-latest'],
+  runId,
+  headSha,
+}) {
+  return {
+    id,
+    name,
+    run_id: runId,
+    status,
+    conclusion: status === 'completed' ? 'success' : null,
+    started_at: startedAt,
+    completed_at: completedAt,
+    runner_name: `runner-${id}`,
+    labels,
+    head_sha: headSha,
+  };
+}
+
+/**
+ * Jobs exactly as collectHistory() returns them: keyed "runId@a<attempt>".
+ *
+ * - 9001@a1 (explicit link, usage record covers this attempt): two terminal
+ *   jobs — 12min build + 3min tests. Under actionsMeasuredCostSource these
+ *   resolve to UNKNOWN (run-level usage already carries the money).
+ * - 9001@a2 is intentionally ABSENT: attempts share one run id and the jobs
+ *   endpoint reflects one job list per run; the collector stores it under the
+ *   first-seen attempt key.
+ * - 9002@a1 (inferred link, NO usage record): one 6-minute job -> measured,
+ *   plus one still-running job -> pending, never emitted.
+ * - 9004@a1 (run still in_progress): one 30-second job -> measured at the
+ *   per-job billed minimum of one minute. Compute was consumed even though
+ *   the run-level CI record is pending.
+ * - 9005@a1 (terminal but unmapped 'neutral' conclusion): one 2.5-minute job
+ *   -> ceil to 3 billed minutes, measured.
+ */
+export function fixtureWorkflowJobs() {
+  return new Map([
+    [
+      '9001@a1',
+      [
+        workflowJobJson({
+          id: 5101,
+          name: 'build',
+          runId: 9001,
+          headSha: sha.pr101r2,
+          startedAt: '2026-07-02T10:12:00Z',
+          completedAt: '2026-07-02T10:24:00Z', // 12 min
+        }),
+        workflowJobJson({
+          id: 5102,
+          name: 'unit-tests',
+          runId: 9001,
+          headSha: sha.pr101r2,
+          startedAt: '2026-07-02T10:12:00Z',
+          completedAt: '2026-07-02T10:15:00Z', // 3 min
+          labels: ['ubuntu-latest'],
+        }),
+      ],
+    ],
+    [
+      '9002@a1',
+      [
+        workflowJobJson({
+          id: 5201,
+          name: 'integration',
+          runId: 9002,
+          headSha: sha.pr101r3,
+          startedAt: '2026-07-03T11:42:00Z',
+          completedAt: '2026-07-03T11:48:00Z', // 6 min
+        }),
+        workflowJobJson({
+          id: 5202,
+          name: 'deploy-dry-run',
+          runId: 9002,
+          headSha: sha.pr101r3,
+          status: 'in_progress',
+          startedAt: '2026-07-03T11:48:30Z',
+        }),
+      ],
+    ],
+    [
+      '9004@a1',
+      [
+        workflowJobJson({
+          id: 5301,
+          name: 'warm-cache',
+          runId: 9004,
+          headSha: sha.pr103head,
+          startedAt: '2026-07-07T08:10:30Z',
+          completedAt: '2026-07-07T08:11:00Z', // 30s -> 1 billed minute
+        }),
+      ],
+    ],
+    [
+      '9005@a1',
+      [
+        workflowJobJson({
+          id: 5401,
+          name: 'gauge-lint',
+          runId: 9005,
+          headSha: sha.pr102head,
+          startedAt: '2026-07-05T10:10:10Z',
+          completedAt: '2026-07-05T10:12:40Z', // 150s -> 3 billed minutes
+        }),
+      ],
+    ],
+  ]);
+}
+
 /**
  * Assemble the full evidence object exactly as collectHistory() would
  * return it (minus transport metadata), for pure assembler tests.
@@ -284,6 +401,7 @@ export function fixtureEvidence() {
     prClassifications: new Map(),
     commitsByPull: fixtureCommitsByPull(),
     workflowRuns: fixtureWorkflowRuns(),
+    workflowJobsByRunAttempt: fixtureWorkflowJobs(),
     checkRunsBySha: fixtureCheckRunsBySha(),
   };
 }

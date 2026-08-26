@@ -36,6 +36,8 @@ export const prRefFor = (n) => `pr:${n}`;
 export const executionRefForRevision = (taskRef, sha) => `${taskRef}:rev:${sha}`;
 export const ciRefFor = (runId, attempt) => `ci:wfrun:${runId}@a${attempt}`;
 export const validationRefForCheckRun = (checkRunId) => `val:checkrun:${checkRunId}`;
+/** Actions job ids are globally unique across attempts, so the ref needs no attempt part. */
+export const computeRefForWorkflowJob = (jobId) => `cmp:wfjob:${jobId}`;
 
 /**
  * Event ids embed the repo scope so one tenant ledger can ingest several
@@ -52,5 +54,6 @@ export const apiRef = {
   commits: (scopeKey, n) => `${scopeKey}/pulls/${n}/commits`,
   workflowRunAttempt: (scopeKey, runId, attempt) =>
     `${scopeKey}/actions/runs/${runId}/attempts/${attempt}`,
+  workflowRunJobs: (scopeKey, runId) => `${scopeKey}/actions/runs/${runId}/jobs`,
   checkRuns: (scopeKey, sha) => `${scopeKey}/commits/${sha}/check-runs`,
 };

@@ -32,6 +32,7 @@ export {
   executionRefForRevision,
   ciRefFor,
   validationRefForCheckRun,
+  computeRefForWorkflowJob,
   eventId,
   apiRef,
 } from './refs.js';
@@ -56,7 +57,11 @@ export {
   UNKNOWN_COST_REASONS,
   unknownCost,
   microUsdFromBillableMs,
+  actionsJobBillableMinutes,
+  actionsJobMultiplier,
   actionsUsageCostSource,
+  actionsMeasuredCostSource,
+  unavailableEvidenceCostSource,
   unknownEverythingCostSource,
   composeCostSources,
 } from './cost-source.js';
@@ -82,6 +87,7 @@ export { assembleAudit } from './map/audit.js';
 export { buildNormalizedBundle, BUNDLE_SCHEMA_VERSION } from './bundle.js';
 export { buildPrIndex, entryForPullRequest } from './map/pr-index.js';
 export { correlateWorkflowRun, mapWorkflowRun, mapCheckRuns, workflowPathToken } from './map/ci-evidence.js';
+export { mapWorkflowJobs, WORKFLOW_JOB_RESOURCE_CLASS } from './map/workflow-jobs.js';
 export { mapPullRequestTask } from './map/pr-tasks.js';
 
 export { signWebhookPayload, verifyWebhookSignature, SIGNATURE_PREFIX } from './webhook/verify.js';

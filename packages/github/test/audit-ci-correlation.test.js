@@ -111,9 +111,11 @@ test('check runs map onto validations bound by revision SHA', () => {
 
   // Check runs expose no billing evidence through GitHub: unknown with reason.
   assert.equal(validations.every((v) => v.payload.cost.known === false), true);
+  // Under this run-level-only source, terminal Actions jobs of correlated runs
+  // also fall through to the generic legacy reason (5 of them in the fixture).
   assert.equal(
     stats.costs.unknown_by_reason[UNKNOWN_COST_REASONS.CHECK_RUNS_UNBILLED],
-    3
+    3 + 5
   );
   assert.equal(stats.counts.check_runs_excluded_by_reason.check_run_revision_unknown_to_ingested_tasks, 1);
 });

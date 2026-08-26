@@ -54,6 +54,14 @@ const PAYLOAD_SPECS = {
     finished_at: { kind: 'iso', required: false },
     duration_ms: { kind: 'int>=0', required: false },
   },
+  // Mirror of packages/core/src/events.js COMPUTE_USAGE_RECORDED spec
+  // (eventSchemaVersion 1): resource_ref + cost required, resource_class
+  // optional. The core owns this contract; this mirror only pins it.
+  compute_usage_recorded: {
+    resource_ref: { kind: 'string', required: true },
+    cost: { kind: 'cost', required: true },
+    resource_class: { kind: 'string', required: false },
+  },
   validation_recorded: {
     validation_ref: { kind: 'string', required: true },
     status: { kind: 'enum', values: VALIDATION_STATUSES, required: true },

@@ -22,13 +22,15 @@ export const NORMALIZATION_VERSION = 'beetlejuice-github-normalization@0.2.0';
  * core event schema (`packages/core/src/events.js`, eventSchemaVersion 1).
  * This list intentionally contains ONLY the types GitHub read-only evidence
  * can support; anything not observable via GitHub (model/tool invocations)
- * is simply never fabricated.
+ * is simply never fabricated. `compute_usage_recorded` became supported when
+ * Actions job evidence (the billed unit of Actions) was added to the sweep.
  */
 export const EMITTED_EVENT_TYPES = Object.freeze([
   'task_started',
   'execution_started',
   'execution_finished',
   'ci_run_recorded',
+  'compute_usage_recorded',
   'validation_recorded',
   'pull_request_created',
   'pull_request_closed',
