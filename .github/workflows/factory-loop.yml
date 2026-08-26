@@ -60,9 +60,11 @@ jobs:
           else
             BASE=origin/main
           fi
+          BASE_SHA=$(git rev-parse "$BASE")
           BRANCH="cycle/${GITHUB_RUN_ID}/${{ matrix.lane }}"
-          git switch -C "$BRANCH" "$BASE"
+          git switch -C "$BRANCH" "$BASE_SHA"
           echo "BEETLEJUICE_CYCLE_BRANCH=$BRANCH" >> "$GITHUB_ENV"
+          echo "BEETLEJUICE_CYCLE_BASE_SHA=$BASE_SHA" >> "$GITHUB_ENV"
 
       - name: Install OpenCode
         shell: bash
@@ -74,26 +76,97 @@ jobs:
           bash .github/scripts/run-opencode-with-retry.sh run \
             --model "$BEETLEJUICE_MODEL" \
             --agent "${{ matrix.agent }}" \
-            "${{ matrix.mission }} Work on this cycle branch from the latest integration candidate. Read the binding Beetlejuice control plane first. Produce durable tested product progress inside your owned lane. Inspect state/factory.json only as context; do not declare global product completion. If the obvious task is already implemented, find the next missing acceptance criterion in your workcard and advance it."
+            "${{ matrix.mission }} Work only on the already-checked-out cycle branch from the immutable integration base. Read the binding Beetlejuice control plane first. Produce durable tested product progress inside your owned path ${{ matrix.owned_path }}. Do NOT git fetch, pull, merge, rebase, cherry-pick, switch, checkout or reset to another ref. Do NOT modify .github/**, docs/**, AGENTS.md or state/**. Inspect state/factory.json only as read-only context; do not declare global product completion. Never put credential-shaped literal fixtures (Slack/GitHub/AWS/API tokens or similar) in source or tests; construct fake sensitive values from harmless fragments at runtime. If the obvious task is already implemented, find the next missing acceptance criterion in your workcard and advance it."
 
-      - name: Run lane-scoped tests when present
+      - name: Repair credential-shaped fixtures before persistence
         if: always()
         shell: bash
         run: |
-          set -o pipefail
-          if [[ -d "${{ matrix.owned_path }}" ]]; then
-            node --test "${{ matrix.owned_path }}" 2>&1 | tee "/tmp/${{ matrix.lane }}-tests.log" || true
+          set -euo pipefail
+          OWNED="${{ matrix.owned_path }}"
+          [[ -d "$OWNED" ]] || exit 0
+          MATCHES=$(grep -RIlE 'xox[baprs]-[A-Za-z0-9-]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}' "$OWNED" --exclude-dir=node_modules --exclude-dir=.git 2>/dev/null || true)
+          if [[ -n "$MATCHES" ]]; then
+            printf 'Credential-shaped literals detected in:\n%s\n' "$MATCHES"
+            bash .github/scripts/run-opencode-with-retry.sh run \
+              --model "$BEETLEJUICE_MODEL" \
+              --agent "${{ matrix.agent }}" \
+              "Before this lane can be persisted, remove every credential-shaped literal from these owned-lane files: ${MATCHES//$'\n'/, }. Preserve the test intent by constructing fake values from harmless string fragments at runtime. Do not expose or print the sensitive-looking values. Work only inside $OWNED; do not fetch/merge/rebase or modify the control plane. Re-run the affected tests."
           fi
+          REMAINING=$(grep -RIlE 'xox[baprs]-[A-Za-z0-9-]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}' "$OWNED" --exclude-dir=node_modules --exclude-dir=.git 2>/dev/null || true)
+          if [[ -n "$REMAINING" ]]; then
+            echo "::error::Credential-shaped literals remain in owned lane; refusing unsafe snapshot."
+            exit 1
+          fi
+
+      - name: Rebuild hermetic lane snapshot
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          OWNED="${{ matrix.owned_path }}"
+          SNAP="/tmp/beetlejuice-owned-${{ matrix.lane }}"
+          rm -rf "$SNAP"
+          mkdir -p "$SNAP/$(dirname "$OWNED")"
+          if [[ -e "$OWNED" ]]; then
+            cp -a "$OWNED" "$SNAP/$OWNED"
+          fi
+
+          git reset --hard "$BEETLEJUICE_CYCLE_BASE_SHA"
+          git clean -fdx
+          rm -rf "$OWNED"
+          if [[ -e "$SNAP/$OWNED" ]]; then
+            mkdir -p "$(dirname "$OWNED")"
+            cp -a "$SNAP/$OWNED" "$OWNED"
+          fi
+
+          git config user.name "beetlejuice-${{ matrix.lane }}-builder"
+          git config user.email "beetlejuice-${{ matrix.lane }}@autonomous.local"
+          git add -- "$OWNED"
+          git commit -m "Factory ${GITHUB_RUN_ID}: ${{ matrix.lane }} hermetic lane" || true
+
+          BAD=$(git diff --name-only "$BEETLEJUICE_CYCLE_BASE_SHA"..HEAD | grep -vE '^${{ matrix.owned_path }}(/|$)' || true)
+          if [[ -n "$BAD" ]]; then
+            echo "::error::Hermetic snapshot contains out-of-lane files:"
+            echo "$BAD"
+            exit 1
+          fi
+
+      - name: Run real lane tests
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          OWNED="${{ matrix.owned_path }}"
+          [[ -d "$OWNED" ]] || { echo "::error::Owned path missing: $OWNED"; exit 1; }
+          FOUND=0
+          while IFS= read -r manifest; do
+            DIR=$(dirname "$manifest")
+            if node -e 'const p=require(process.argv[1]); process.exit(p.scripts && p.scripts.test ? 0 : 1)' "./$manifest"; then
+              FOUND=1
+              echo "Running tests in $DIR"
+              npm test --prefix "$DIR"
+            fi
+          done < <(find "$OWNED" -name package.json -not -path '*/node_modules/*' -print | sort)
+          if [[ "$FOUND" -eq 0 ]]; then
+            echo "::error::No runnable test script found in owned lane $OWNED"
+            exit 1
+          fi
+
+      - name: Archive lane snapshot before push
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: beetlejuice-lane-${{ matrix.lane }}-${{ github.run_id }}
+          path: ${{ matrix.owned_path }}
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Persist lane snapshot
         if: always()
         shell: bash
         run: |
           set -euo pipefail
-          git config user.name "beetlejuice-${{ matrix.lane }}-builder"
-          git config user.email "beetlejuice-${{ matrix.lane }}@autonomous.local"
-          git add -A
-          git commit -m "Factory ${GITHUB_RUN_ID}: ${{ matrix.lane }} lane" || true
           git push --force origin "HEAD:refs/heads/${BEETLEJUICE_CYCLE_BRANCH}"
 
   integration:
@@ -106,6 +179,14 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+
+      - name: Download durable lane backups
+        if: always()
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          pattern: beetlejuice-lane-*-${{ github.run_id }}
+          path: /tmp/beetlejuice_lane_artifacts
 
       - name: Checkout persistent integration candidate and mount lane snapshots
         shell: bash
@@ -122,13 +203,18 @@ jobs:
           for lane in core github privacy product; do
             REMOTE="cycle/${GITHUB_RUN_ID}/${lane}"
             DEST="/tmp/beetlejuice_${lane}"
+            ART="/tmp/beetlejuice_lane_artifacts/beetlejuice-lane-${lane}-${GITHUB_RUN_ID}"
             rm -rf "$DEST"
             if git ls-remote --exit-code --heads origin "refs/heads/$REMOTE" >/dev/null 2>&1; then
               git fetch origin "$REMOTE:refs/remotes/origin/$REMOTE"
               git worktree add --detach "$DEST" "origin/$REMOTE"
+            elif [[ -d "$ART" ]]; then
+              mkdir -p "$DEST"
+              cp -a "$ART/." "$DEST/"
+              echo "Recovered $lane from workflow artifact because branch snapshot was unavailable."
             else
               mkdir -p "$DEST"
-              echo "Lane $lane produced no snapshot in run $GITHUB_RUN_ID" > "$DEST/LANE_MISSING.txt"
+              echo "Lane $lane produced no durable snapshot in run $GITHUB_RUN_ID" > "$DEST/LANE_MISSING.txt"
             fi
           done
 
@@ -149,12 +235,17 @@ jobs:
         shell: bash
         run: |
           set +e
+          mkdir -p reports
           npm test
           TEST_RC=$?
           npm run demo
           DEMO_RC=$?
           echo "integration_test_rc=$TEST_RC" > reports/integration-runtime-status.txt
           echo "demo_rc=$DEMO_RC" >> reports/integration-runtime-status.txt
+          if [[ "$TEST_RC" -ne 0 || "$DEMO_RC" -ne 0 ]]; then
+            echo "::error::Integrated candidate failed verification: tests=$TEST_RC demo=$DEMO_RC"
+            exit 1
+          fi
           exit 0
 
       - name: Persist integration branch
