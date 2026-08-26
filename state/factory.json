@@ -2,7 +2,7 @@
   "schema_version": "1",
   "status": "BUILDING",
   "continue": true,
-  "next_action": "IMPLEMENT_AND_EXECUTE_P0_5_REAL_WORLD_ROBUSTNESS_GATE_BEFORE_P1",
+  "next_action": "IMPLEMENT_AND_EXECUTE_P0_5_IDENTIFIABLE_REAL_WORLD_CORPUS_GATE_BEFORE_P1",
   "blocking_reason": null,
   "p0_checks": {
     "canonical_agentic_task": true,
@@ -19,7 +19,9 @@
     "integration_ci_green": true
   },
   "p0_5_checks": {
-    "real_repo_corpus_5_plus": false,
+    "identifiable_primary_corpus_5_plus": false,
+    "secondary_messy_robustness_set": false,
+    "agent_task_model_provenance_confidence": false,
     "zero_crash_or_typed_refusal": false,
     "pagination_large_history": false,
     "rate_limit_network_adversarial": false,
@@ -31,6 +33,8 @@
     "billing_no_evidence_honesty_and_utility": false,
     "billing_partial_evidence_honesty": false,
     "billing_complete_evidence_accounting": false,
+    "economic_or_learnable_corpus_path_proven": false,
+    "economic_calibration_path_defined": false,
     "privacy_boundaries_preserved": false,
     "real_world_report_persisted": false,
     "integration_ci_green_after_repairs": false
@@ -49,15 +53,24 @@
     "integration_report": "reports/integration-runtime-status.txt",
     "adversarial_audit": "reports/latest-product-audit.md",
     "p0_5_binding_workcard": "docs/workcards/WC-007-REAL-WORLD-ROBUSTNESS.md",
-    "p0_5_reason": "P0 proves internal correctness but not robustness or commercial usefulness on messy real GitHub histories. P0.5 must falsify ingestion, classification, outcome attribution, certain-waste precision, network behavior and billing-evidence viability before P1 is treated as the next milestone."
+    "p0_5_reason": "P0 proves internal correctness but not real-world robustness or data-network viability. P0.5 must use a deliberately high-identifiability primary corpus where agent, task, model/configuration provenance, execution correlation and outcome are sufficiently observable for clean falsifiable hypotheses. Messy cases are a separate robustness set, not training ground truth. P0.5 passes only if complete economic labels are obtainable for a useful subset OR the high-confidence non-monetary corpus is demonstrably learnable and has a defensible later calibration path to economic labels."
   },
   "billing_evidence_policy": {
-    "github_only": "Report observable outcomes/retries/waste and data gaps; never claim total dollars or total cost per outcome without monetary evidence.",
-    "partial": "Compute only evidenced spend, label coverage and partiality, never extrapolate missing components.",
-    "complete": "Only complete evidenced components may be labeled total measured economic cost and total cost per successful outcome."
+    "github_only": "Report observable outcomes/retries/waste and data gaps; never claim total dollars or total cost per outcome without monetary evidence. Retain as a learning row only when hypothesis-critical labels satisfy the identifiability gate.",
+    "partial": "Compute only evidenced spend, label coverage and partiality, never extrapolate missing components. May serve partial economic calibration only when attribution is defensible.",
+    "complete": "Only complete evidenced and attributable components may be labeled total measured economic cost and total cost per successful outcome."
+  },
+  "corpus_policy": {
+    "primary": "Small high-confidence corpus first. Prefer explicit agent/tool identity, recoverable task class, explicit or strongly constrained model/provider/configuration with provenance/confidence, defensible execution correlation, observable outcome and known completeness flags.",
+    "secondary": "Messy ambiguous repositories test abstention, pagination, failures and robustness only; do not promote ambiguous labels to ground truth.",
+    "unknowns": "Unknown remains unknown. Inferred model/configuration labels must carry provenance/confidence and never be treated as measured fact."
+  },
+  "viability_paths": {
+    "path_1": "COMPLETE_ECONOMIC_LABELS: sufficiently attributed complete billing for a useful subset supports true measured total cost/outcome labels.",
+    "path_2": "LEARNABLE_HIGH_CONFIDENCE_CORPUS: clean structural labels support useful hypotheses even without complete billing, but a concrete economic calibration source (billing-labeled subset, prospective instrumentation or provider adapters) must be demonstrated."
   },
   "p0_5_target": {
-    "objective": "real-world robustness and billing viability gate",
+    "objective": "real-world robustness plus identifiable economic-or-learning viability gate",
     "minimum_real_repositories": 5,
     "preferred_real_repositories": 10,
     "report": "reports/real-world-robustness.md",
@@ -68,10 +81,10 @@
     "requirements": [
       "least-privilege read-only permissions by default",
       "webhook signature verification",
-      "installation and repository scoping",
+      "installation/repository scoping",
       "historical bootstrap audit",
       "incremental event ingestion",
-      "explicit credential and environment setup documentation",
+      "explicit credential/environment setup documentation",
       "under-five-minute target when sufficient history is available"
     ]
   }
