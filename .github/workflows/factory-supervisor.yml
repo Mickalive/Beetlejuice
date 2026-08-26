@@ -13,6 +13,7 @@ on:
     paths:
       - '.github/workflows/factory-supervisor.yml'
       - '.github/workflows/factory-loop.yml'
+      - '.github/scripts/run-opencode-with-retry.sh'
       - 'state/factory.json'
 
 permissions:
@@ -123,23 +124,23 @@ jobs:
           RUNS=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow factory-loop.yml --limit 50 \
             --json databaseId,status,conclusion,createdAt,headSha 2>/dev/null || echo '[]')
 
-          # Changing the factory execution workflow makes older factory executions
-          # unsafe. A supervisor-only maintenance change (for example run cleanup)
-          # must NOT destroy useful product work already in flight.
+          # A change to the execution workflow, Ox watchdog/model policy, or the
+          # supervisor itself invalidates already-running factory executions.
+          # Stop those runs so no stale process can keep using an older model policy.
           if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
             CHANGED=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}" \
               --jq '.files[]?.filename' 2>/dev/null || true)
-            if grep -Eq '^\.github/workflows/factory-loop\.yml$' <<<"$CHANGED"; then
+            if grep -Eq '^(\.github/workflows/factory-loop\.yml|\.github/scripts/run-opencode-with-retry\.sh|\.github/workflows/factory-supervisor\.yml)$' <<<"$CHANGED"; then
               while IFS= read -r RUN_ID; do
                 [[ -n "$RUN_ID" ]] || continue
                 RUN_SHA=$(jq -r --argjson id "$RUN_ID" '.[] | select(.databaseId == $id) | .headSha' <<<"$RUNS")
                 if [[ "$RUN_SHA" != "$GITHUB_SHA" ]]; then
-                  echo "Stopping stale factory run $RUN_ID at $RUN_SHA after factory control-plane update $GITHUB_SHA"
+                  echo "Stopping stale factory run $RUN_ID at $RUN_SHA after control-plane update $GITHUB_SHA"
                   gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/cancel" >/dev/null 2>&1 || true
                   gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/force-cancel" >/dev/null 2>&1 || true
                 fi
               done < <(jq -r '.[] | select(.status != "completed") | .databaseId' <<<"$RUNS")
-              echo "Stale factory executions stopped; only this factory-loop revision may proceed."
+              echo "Stale factory executions stopped; the next cycle will use the current Ox-only control plane."
               exit 0
             fi
           fi
