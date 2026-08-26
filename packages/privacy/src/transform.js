@@ -10,6 +10,11 @@
  * - free-text identity inputs (`agent_name`, `model_name`) are content-scanned
  *   and then classified into coarse family/class enums; raw names are dropped;
  * - exact timestamps have no input field at all — they cannot be smuggled in;
+ * - rejection diagnostics never echo caller-controlled strings: a forbidden
+ *   or unknown KEY NAME is itself tenant-controlled free text that can carry
+ *   org/repo/developer markers, so foreign keys are reported as
+ *   `field_redacted: true`; only package-owned closed-vocabulary names are
+ *   ever attached as `field`;
  * - output records are built in canonical field order for reproducibility;
  * - every produced field carries a GENERALIZATION PROVENANCE (`explicit`,
  *   `bucketed`, `classified`, `defaulted`) so the export envelope can explain
@@ -115,8 +120,44 @@ export const GENERALIZATION_KINDS = Object.freeze([
 
 const REQUIRED_INPUTS = ["task_class", "language_family", "outcome"];
 
+/**
+ * The ONLY field names that may ever be echoed into an export envelope.
+ * Closed world: every member is a package-owned identifier (an allowed
+ * tenant-input key or a canonical GLR field). Anything else — including any
+ * caller-supplied foreign key — is tenant-controlled free text that can
+ * carry org/repo/developer markers, so it is REDACTED, never propagated,
+ * even in rejection diagnostics (unlinkable-by-default applies to the whole
+ * envelope, not only to accepted records).
+ */
+export const ECHOABLE_FIELD_NAMES = Object.freeze(
+  [...new Set([...GLR_FIELD_ORDER, ...Object.keys(INPUT_SPECS)])].sort(),
+);
+
+/**
+ * Redact a rejection `field` reference for envelope publication.
+ *
+ * @param {string|undefined} key field name attached to a rejection
+ * @returns {{field: string} | {field_redacted: true}}
+ *   `{field}` only when the name is a package-owned closed-vocabulary
+ *   identifier; otherwise `{field_redacted: true}` so diagnostics stay
+ *   explainable without echoing caller-controlled strings.
+ */
+export function redactRejectionField(key) {
+  if (typeof key === "string" && ECHOABLE_FIELD_NAMES.includes(key)) {
+    return { field: key };
+  }
+  return { field_redacted: true };
+}
+
 function reject(index, reasonCode, field) {
-  return { status: "rejected", entry: { index, reason_code: reasonCode, ...(field ? { field } : {}) } };
+  return {
+    status: "rejected",
+    entry: {
+      index,
+      reason_code: reasonCode,
+      ...redactRejectionField(field),
+    },
+  };
 }
 
 function resolveEnum(spec, value, index, field) {

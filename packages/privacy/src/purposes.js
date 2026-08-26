@@ -29,6 +29,14 @@ export const CONSENT_PURPOSES = Object.freeze([
  *   published aggregate statistics. Lower epsilon = more noise = stronger
  *   protection, so callers may lower epsilon freely but never exceed this
  *   ceiling — the exact inverse of the cohort floor.
+ * - `maximumRowsPerCombination`: CEILING on how many rows ONE export request
+ *   may admit for any single distinct abstract combination. Without it, a
+ *   single source could launder a near-unique combination past the cohort
+ *   floor by simply submitting k duplicate rows, defeating the rarity
+ *   defense. Callers may tighten the cap freely but never exceed this
+ *   ceiling — same shape as the epsilon ceiling. The research surface is
+ *   tightest; its value equals its cohort floor, so a floor-sized
+ *   homogeneous cohort stays admissible while gross inflation cannot.
  * - `requiresLicenseAcknowledgement`: the external research / data-licensing
  *   surface may only be used when the caller explicitly acknowledges that a
  *   licensing right exists for this data (installation alone never grants it).
@@ -37,16 +45,19 @@ export const PURPOSE_POLICIES = Object.freeze({
   [PRODUCT_TELEMETRY]: Object.freeze({
     minimumCohort: 5,
     maximumEpsilon: 5,
+    maximumRowsPerCombination: 100,
     requiresLicenseAcknowledgement: false,
   }),
   [GLOBAL_BENCHMARK_CONTRIBUTION]: Object.freeze({
     minimumCohort: 5,
     maximumEpsilon: 2,
+    maximumRowsPerCombination: 50,
     requiresLicenseAcknowledgement: false,
   }),
   [EXTERNAL_RESEARCH_DATA_LICENSING]: Object.freeze({
     minimumCohort: 25,
     maximumEpsilon: 1,
+    maximumRowsPerCombination: 25,
     requiresLicenseAcknowledgement: true,
   }),
 });
@@ -63,3 +74,12 @@ export const ABSOLUTE_MINIMUM_COHORT = 2;
  * can negotiate past it.
  */
 export const ABSOLUTE_MAXIMUM_EPSILON = 5;
+
+/**
+ * Absolute highest number of rows one export request may admit for a single
+ * distinct abstract combination, on any purpose. Beyond this bound, extra
+ * duplicate rows of the same combination are suppressed (`over_combination_cap`)
+ * instead of admitted: cohort floors protect rarity ACROSS combinations, this
+ * bound protects them against single-source duplication WITHIN one batch.
+ */
+export const ABSOLUTE_MAXIMUM_ROWS_PER_COMBINATION = 100;

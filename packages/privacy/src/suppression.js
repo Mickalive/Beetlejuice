@@ -9,6 +9,11 @@
  *
  * The grouping key is derived ONLY from the record's own abstract content —
  * there is no stored id, no pseudonym and no hash acting as a join key.
+ *
+ * Additionally, admission per distinct combination can be capped
+ * (`maxPerCombination`): cohort floors alone are launderable by one source
+ * duplicating rows within a single batch, so the gate bounds how many rows
+ * ONE export may contribute to any single combination.
  */
 
 import { validateGlobalLearningRecord } from "./schema.js";
@@ -48,26 +53,61 @@ function groupByCombination(records) {
 
 /**
  * Suppress every record whose exact abstract combination occurs fewer than
- * `threshold` times in the batch. One entry is emitted PER SUPPRESSED RECORD
- * (all sharing the group's explanation) so callers can conserve record
- * counts: accepted + suppressed + rejected === provided.
+ * `threshold` times in the batch, and admit at most `maxPerCombination` rows
+ * per distinct combination.
+ *
+ * The cap closes a laundering hole in pure k-anonymity: a single source
+ * could otherwise push any near-unique combination past the floor by
+ * submitting k duplicate rows in one batch. Rows beyond the cap are
+ * SUPPRESSED with `over_combination_cap` (never silently dropped and never
+ * admitted), so `accepted + suppressed === candidates.length` still holds.
+ * All members of a group are byte-identical by construction (the grouping
+ * key is the full record), so which copies are admitted is irrelevant and
+ * the outcome stays independent of input order.
+ *
+ * One entry is emitted PER SUPPRESSED RECORD (all sharing the group's
+ * explanation) so callers can conserve record counts.
  *
  * @param {Record<string, string|boolean>[]} candidates schema-valid records
- * @param {{threshold?: number}} [options]
+ * @param {{threshold?: number, maxPerCombination?: number}} [options]
+ *   `maxPerCombination` omitted/undefined disables capping for direct
+ *   low-level use; the exporter always passes an effective policy cap.
  * @returns {{
  *   admitted: Record<string, string|boolean>[],
- *   suppressed: {reason_code: "below_cohort_threshold", cohort_size: number, threshold: number, combination: Record<string, string|boolean>}[],
+ *   suppressed: {reason_code: "below_cohort_threshold"|"over_combination_cap", cohort_size: number, threshold: number, rows_per_combination_limit?: number, combination: Record<string, string|boolean>}[],
  * }}
  */
 export function suppressRareCombinations(candidates, options = {}) {
   const threshold = options.threshold ?? 1;
+  /** @type {number} */
+  let cap = Infinity;
+  if (options.maxPerCombination !== undefined) {
+    if (
+      !Number.isInteger(options.maxPerCombination) ||
+      options.maxPerCombination < 1
+    ) {
+      throw new TypeError(
+        "maxPerCombination must be a positive integer when provided",
+      );
+    }
+    cap = options.maxPerCombination;
+  }
   const groups = groupByCombination(candidates);
 
   const admitted = [];
   const suppressed = [];
   for (const [, members] of groups) {
     if (members.length >= threshold) {
-      admitted.push(...members);
+      admitted.push(...members.slice(0, cap));
+      for (const member of members.slice(cap)) {
+        suppressed.push({
+          reason_code: "over_combination_cap",
+          cohort_size: members.length,
+          threshold,
+          rows_per_combination_limit: cap,
+          combination: member,
+        });
+      }
     } else {
       for (const member of members) {
         suppressed.push({

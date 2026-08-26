@@ -11,7 +11,9 @@
  *   classification, allowlist rejection, generalization provenance).
  * - `validateGlobalLearningRecord` / `isValidGlobalLearningRecord` — glr/1
  *   schema validation.
- * - `suppressRareCombinations` / `aggregateCohorts` — rare-combination defense.
+ * - `suppressRareCombinations` / `aggregateCohorts` — rare-combination defense
+ *   with per-combination admission caps (anti single-source inflation).
+ * - `effectiveMaxRowsPerCombination` — policy ceiling for that cap.
  * - `addPrivateNoiseToCohorts` / `effectiveEpsilon` — differential privacy for
  *   published aggregate statistics (seeded, deterministic, per-purpose
  *   epsilon ceilings; MASTER_PROMPT.md §6).
@@ -26,6 +28,10 @@
  * - No raw magnitudes, no raw content, no exact timestamps.
  * - Fail-closed: unknown fields and suspicious values reject the record;
  *   nothing is silently dropped.
+ * - No value echo. Neither offending values NOR caller-supplied key names
+ *   reappear in any envelope: diagnostics carry only package-owned
+ *   closed-vocabulary field names; foreign keys are reported as
+ *   `field_redacted`.
  * - Deterministic and versioned: identical input yields byte-identical output.
  */
 
@@ -80,7 +86,9 @@ export {
 
 export {
   GENERALIZATION_KINDS,
+  ECHOABLE_FIELD_NAMES,
   normalizeTenantRecord,
+  redactRejectionField,
 } from "./transform.js";
 
 export {
@@ -100,6 +108,7 @@ export {
 export {
   ABSOLUTE_MINIMUM_COHORT,
   ABSOLUTE_MAXIMUM_EPSILON,
+  ABSOLUTE_MAXIMUM_ROWS_PER_COMBINATION,
   CONSENT_PURPOSES,
   EXTERNAL_RESEARCH_DATA_LICENSING,
   GLOBAL_BENCHMARK_CONTRIBUTION,
@@ -130,5 +139,6 @@ export {
   PrivacyExportError,
   effectiveCohortThreshold,
   effectiveEpsilon,
+  effectiveMaxRowsPerCombination,
   exportGlobalLearningRecords,
 } from "./exporter.js";
