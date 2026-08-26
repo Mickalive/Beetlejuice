@@ -2,7 +2,7 @@
   "schema_version": "1",
   "status": "BUILDING",
   "continue": true,
-  "next_action": "INTEGRATE_LANES_INTO_ONE_CANONICAL_MODEL: merge verified cycle/32921371826 snapshots core@4ebc931 (59/59 tests) and product@47d255f (34/34 tests + working demo) into lab/integration as ONE canonical AGENTIC_TASK model per audit S1/R7 — CLI consumes packages/core TenantLedger.audit() output, single money unit at rest, unified rule IDs and outcome vocabulary — then land rule-boundary guards R1-R4 (deterministic-retry must never flag a succeeded unit; duplicate-CI must abstain on differing revision_key; supersession must require strictly-later start) and frozen-events fix R5",
+  "next_action": "INTEGRATE_LANES_WITH_COMMITTED_E2E_TEST: merge the four verified lane snapshots (core@4ebc931, github@3b0f716, privacy@e8b1dba, product@8173d02 — 267 passing tests re-run by director) into ONE runnable workspace on lab/integration with a committed cross-package e2e (github fixture collectHistory -> TenantLedger.appendAll -> ledger.audit() -> validateCoreAuditExport -> renderMarkdown), repairing the seam break this test will immediately expose: core findings must serialize evidence_units[] (A2 — proven live: product CLI exits 2 on genuine core audit() output; adding evidence_units mechanically renders the full report). Land R1/R3/R5 in the same pass so 'certain' waste claims survive audit.",
   "blocking_reason": null,
   "p0_checks": {
     "canonical_agentic_task": false,
@@ -18,59 +18,73 @@
     "quickstart_docs": false,
     "integration_ci_green": false
   },
-  "last_verified_commit": "894e7f73925b796336e8ac92846b8fe3d93fccd5",
-  "cycle": 32926256906,
+  "last_verified_commit": "187f566c748f160c8abab554d1dddff598247c8e",
+  "cycle": 32926312167,
   "evidence": {
-    "closed_cycle": 32921371826,
-    "verified_at_utc": "2026-08-26T02:59:32Z",
-    "candidate_head": "5b2a828a1261c9013e99196354da97e4ad03c28c",
+    "closed_cycle": 32926312167,
+    "verified_at_utc": "2026-08-26T05:05:00Z",
+    "candidate_head": "187f566c748f160c8abab554d1dddff598247c8e",
     "audit_report_present": true,
     "audit_verdict": "REJECT_NOT_P0_READY",
     "audit_p0_score_on_candidate": "0/12",
-    "audit_source": "reports/latest-product-audit.md (restored verbatim from refs/heads/cycle/32921371826/audit after transient mount failure)",
+    "audit_source": "reports/latest-product-audit.md (mounted from refs/heads/cycle/32926312167/audit @ bf8bb92; matches origin/cycle/32926312167/audit)",
     "candidate_checks": [
       {
-        "command": "npm test",
+        "command": "git ls-tree -r HEAD --name-only | grep -cE '^(packages|apps)/'",
+        "result": "0 — candidate still contains zero product code; lab/integration unchanged since cycle 32922397698"
+      },
+      {
+        "command": "npm install --ignore-scripts && npm test",
         "exit_code": 0,
-        "result": "VACUOUS_PASS: 0 tests discovered — CI 'Require a real test suite' guard fails on clean checkout"
+        "result": "VACUOUS_PASS: # tests 0 — CI 'Require a real test suite' guard fails on clean checkout (guard also blind to dot-dir vendored trees: prune list covers only ./node_modules, A6 confirmed in ci.yml)"
       },
       {
         "command": "npm run demo",
         "exit_code": 1,
         "result": "MODULE_NOT_FOUND: apps/cli/src/demo.js does not exist on candidate"
-      },
-      {
-        "command": "git ls-tree -r HEAD",
-        "result": "no packages/, no apps/, no product code on lab/integration"
       }
     ],
-    "lane_evidence": {
+    "director_rerun_lane_tests": {
       "core": {
-        "snapshot": "cycle/32921371826/core@4ebc931",
-        "tests": "59/59 pass (director re-run)",
-        "notes": "versioned events, exact cost identity incl unknown-cost handling, tenant isolation held under audit probes; DEFECTS: D1 confirmed by director probe (WASTE_DET_RETRY_V1 confidence=certain flagged successful invocation M2 of a merged task), D3 unvalidated equivalence_key, D5 live internal events array"
-      },
-      "product": {
-        "snapshot": "cycle/32921371826/product@47d255f",
-        "tests": "34/34 pass (director re-run)",
-        "demo": "runs exit 0, economics lead, hand-verified figures ($28.57 measured / $30.17 representable / $8.99 avoidable)",
-        "notes": "DEFECTS: D2 identical-retry flags succeeded retry execution; D4 superseded rule missing strictly-later-start guard; depends on packages/core nowhere (divergent canonical model S1)"
+        "snapshot": "origin/cycle/32921371826/core@4ebc931",
+        "tests": "59/59 pass"
       },
       "github": {
-        "snapshot": null,
-        "result": "NO lane snapshot in cycle 32921371826 (WC-002 unstarted)"
+        "snapshot": "origin/cycle/32926312167/github@3b0f716",
+        "tests": "93/93 pass"
       },
       "privacy": {
-        "snapshot": null,
-        "result": "NO lane snapshot in cycle 32921371826 (WC-003 unstarted — no GlobalLearningRecord, no privacy gate, no exporter)"
+        "snapshot": "origin/cycle/32926312167/privacy@e8b1dba",
+        "tests": "59/59 pass"
+      },
+      "product": {
+        "snapshot": "origin/cycle/32926312167/product@8173d02",
+        "tests": "56/56 pass"
+      },
+      "total_passing": 267
+    },
+    "director_seam_probes": [
+      {
+        "seam": "github(source) -> core(tenant analytics)",
+        "probe": "fixture e2e collectHistory(in-memory client) -> assembleAudit -> REAL TenantLedger.appendAll",
+        "result": "23/23 events accepted unmodified; reconstruct yields tasks t:pr:101/102/103 (15+5+3 events) — seam viable, still unwired in any committed code path"
+      },
+      {
+        "seam": "core(tenant analytics) -> product(report surface)",
+        "probe": "JSON envelope of genuine ledger.audit() fed to product CLI --core-audit",
+        "result": "REJECTED exit 2: $.audit.waste.findings[0..1].evidence_units required + export_version must be \"1\" — A2 reproduced. Positive control: adding evidence_units mechanically (export_version=1) renders full economics-first report, exit 0 ($0.232 measured / 1 accepted / $0.23 per outcome / waste ratio 100% of measured spend on an accepted task — sanity-note observation from audit §6 stands)"
+      },
+      {
+        "seam": "D5 events() frozen-view claim",
+        "probe": "ledger.events().push({bogus:true}) then ledger.audit()",
+        "result": "push succeeded and CORRUPTED the next audit(): phantom task aggregate with taskRef=undefined appeared in serialized output — D5 live with demonstrated data-integrity impact, not just a docstring lie"
+      },
+      {
+        "seam": "D1/D3 rule boundaries",
+        "probe": "source/test inspection of core lane",
+        "result": "waste-det-retry.test.js:31-37 still asserts successful M3 (status ok) is charged confidence=certain (D1 live, codified); src/waste/rules/duplicate-ci.js contains zero revision_key handling (D3 live)"
       }
-    },
-    "director_probe": {
-      "target": "audit finding D1 (highest severity)",
-      "reproduction": "core lane: task T-D1 = M1 auth_error + M2 status ok, same attempt_equivalence_key, PR merged; runWasteAnalysis([task], rules:[RULE_DET_RETRY])",
-      "observed": "finding WASTE_DET_RETRY_V1 confidence=certain evidence_refs=[M2] — flags the invocation that succeeded",
-      "conclusion": "'certain waste' promise falsified at rule boundary; repair R1 mandatory before any certain-waste P0 claim"
-    },
-    "p0_check_rationale": "All checks graded against the integration candidate per docs/PRODUCT_OBJECTIVE.md. Candidate contains zero product code, so every check is false regardless of lane-level partial passes recorded above. No p0_check may flip until integration lands and each is backed by an executed command."
+    ],
+    "p0_check_rationale": "All checks graded against the integration candidate per docs/PRODUCT_OBJECTIVE.md. Candidate has zero product code and zero tests, so every check stays false regardless of strong lane-level passes recorded above. No check flips until lanes are integrated and each criterion is backed by an executed command on lab/integration."
   }
 }
