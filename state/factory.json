@@ -1,65 +1,6 @@
 {
-  "schema_version": "1",
-  "status": "BUILDING",
-  "continue": true,
-  "next_action": "IMPLEMENT_AND_EXECUTE_P0_5_ARCHITECTURE_LEARNING_AND_BILLING_CALIBRATION_GATE_BEFORE_P1",
-  "blocking_reason": null,
-  "p0_checks": {
-    "canonical_agentic_task": true,
-    "github_fixture_ingestion": true,
-    "cost_accounting": true,
-    "outcome_attribution": true,
-    "certain_waste_detector": true,
-    "synthetic_demo": true,
-    "real_read_only_github_mode": true,
-    "economic_product_surface": true,
-    "privacy_safe_global_export": true,
-    "critical_tests": true,
-    "quickstart_docs": true,
-    "integration_ci_green": true
-  },
-  "p0_5_checks": {
-    "identifiable_primary_corpus_5_plus": false,
-    "secondary_messy_robustness_set": false,
-    "agent_task_model_provenance_confidence": false,
-    "architecture_schema_topology_policy_representation": false,
-    "architecture_reconstruction_manual_ground_truth": false,
-    "architecture_learning_hypotheses_falsifiable": false,
-    "zero_crash_or_typed_refusal": false,
-    "pagination_large_history": false,
-    "rate_limit_network_adversarial": false,
-    "classification_manual_ground_truth": false,
-    "outcome_manual_ground_truth": false,
-    "certain_structural_waste_precision_review": false,
-    "determinism_on_frozen_real_evidence": false,
-    "real_github_https_positive_path": false,
-    "billing_no_evidence_honesty_and_architecture_utility": false,
-    "billing_partial_evidence_honesty": false,
-    "billing_complete_evidence_accounting": false,
-    "local_real_billing_attachable_without_schema_redesign": false,
-    "economic_or_learnable_corpus_path_proven": false,
-    "privacy_safe_global_architecture_export": false,
-    "privacy_boundaries_preserved": false,
-    "real_world_report_persisted": false,
-    "integration_ci_green_after_repairs": false
-  },
-  "last_verified_commit": "fe14fd6f737841b2668dc32d3fe2fac2dc2991c1",
-  "cycle": 32957437769,
-  "evidence": {
-    "p0_verified_at_utc": "2026-08-26T12:53:30Z",
-    "p0_ci_run_id": 32971013235,
-    "p0_ci_workflow": "BEETLEJUICE Product CI",
-    "p0_ci_event": "push",
-    "p0_ci_head": "fe14fd6f737841b2668dc32d3fe2fac2dc2991c1",
-    "p0_ci_conclusion": "success",
-    "p0_pull_request": 1,
-    "local_verification": "459 tests / 459 pass / 0 fail / 0 skipped; deterministic synthetic demo; real-mode error handling and credential redaction verified",
-    "integration_report": "reports/integration-runtime-status.txt",
-    "adversarial_audit": "reports/latest-product-audit.md",
-    "p0_5_binding_workcard": "docs/workcards/WC-007-REAL-WORLD-ROBUSTNESS.md",
-    "p0_5_reason": "P0.5 must prove that Beetlejuice learns a clean, high-confidence model of agentic automation architecture first. Cost is not the primary explanatory feature. Complete or partial real billing is attached tenant-locally as economic calibration/labels and may enter the global layer only as rights-cleared privacy-gated generalized labels. The canonical architecture model must remain useful without billing and accept later true billing without redesign."
-  },
   "architecture_learning_policy": {
+    "causality": "Cross-sectional correlations are hypotheses, not causal proof. Preserve intervention/before-after labels for later local autotuning.",
     "primary_target": "Learn which automation architectures/configurations produce accepted useful work with lower structural waste for defined task contexts.",
     "relation": "TASK_CONTEXT + AGENT_MODEL_CONFIG + AUTOMATION_ARCHITECTURE -> OUTCOME + LATENCY + STRUCTURAL_WASTE + RESOURCE_FOOTPRINT",
     "topology_features": [
@@ -75,35 +16,88 @@
       "termination_early_stop",
       "supersession_cancellation_handling"
     ],
-    "unknowns": "Unknown remains unknown. Inferred fields carry provenance/confidence and are never promoted silently to measured fact.",
-    "causality": "Cross-sectional correlations are hypotheses, not causal proof. Preserve intervention/before-after labels for later local autotuning."
+    "unknowns": "Unknown remains unknown. Inferred fields carry provenance/confidence and are never promoted silently to measured fact."
   },
   "billing_evidence_policy": {
+    "complete": "Only complete evidenced and attributable components may be labeled total measured economic cost and total cost per successful outcome.",
     "github_only": "Architecture/outcome/waste remains useful where structurally defensible; never claim total dollars or total cost per outcome without monetary evidence.",
     "partial": "Compute only evidenced spend, label coverage and partiality, never extrapolate missing components.",
-    "complete": "Only complete evidenced and attributable components may be labeled total measured economic cost and total cost per successful outcome.",
     "role": "Billing is a local calibration/economic-label layer attached to the architecture model, not the foundational architecture signal."
   },
+  "blocking_reason": null,
+  "continue": true,
   "corpus_policy": {
+    "global_export": "Only unlinkable privacy-gated abstract architecture/task/outcome/resource/economic labels may leave the tenant boundary where rights permit.",
     "primary": "Small high-confidence architecture-learning corpus first. Prefer explicit agent/tool identity, recoverable task class, explicit or strongly constrained model/provider/configuration, defensible execution correlation, observable architecture topology/policy and observable outcome.",
-    "secondary": "Messy ambiguous repositories test abstention, pagination, failures and robustness only; do not promote ambiguous labels to ground truth.",
-    "global_export": "Only unlinkable privacy-gated abstract architecture/task/outcome/resource/economic labels may leave the tenant boundary where rights permit."
-  },
-  "viability_paths": {
-    "path_1": "COMPLETE_ECONOMIC_LABELS: sufficiently attributed complete billing for a useful subset supports true measured total cost/outcome labels on architecture rows.",
-    "path_2": "ARCHITECTURE_FIRST_CALIBRATION: clean architecture/outcome/resource rows are learnable before complete billing, and true billing can later attach as calibration labels without redefining the canonical model."
+    "secondary": "Messy ambiguous repositories test abstention, pagination, failures and robustness only; do not promote ambiguous labels to ground truth."
   },
   "customer_value_model": {
-    "without_full_billing": "Explain the customer's automation architecture, outcomes and defensible structural inefficiencies; disclose missing monetary evidence.",
+    "future_global_model": "Use consented unlinkable architecture/outcome rows progressively calibrated by generalized real billing labels to learn which architectures work under which task conditions.",
     "with_full_billing": "Use the customer's actual model/tool/CI pricing and attributable usage to calculate true local cost/outcome and map dollars onto the architectural inefficiencies.",
-    "future_global_model": "Use consented unlinkable architecture/outcome rows progressively calibrated by generalized real billing labels to learn which architectures work under which task conditions."
+    "without_full_billing": "Explain the customer's automation architecture, outcomes and defensible structural inefficiencies; disclose missing monetary evidence."
+  },
+  "cycle": 33014153925,
+  "evidence": {
+    "adversarial_audit": "reports/latest-product-audit.md",
+    "integration_report": "reports/integration-runtime-status.txt",
+    "local_verification": "459 tests / 459 pass / 0 fail / 0 skipped; deterministic synthetic demo; real-mode error handling and credential redaction verified",
+    "p0_5_binding_workcard": "docs/workcards/WC-007-REAL-WORLD-ROBUSTNESS.md",
+    "p0_5_reason": "P0.5 must prove that Beetlejuice learns a clean, high-confidence model of agentic automation architecture first. Cost is not the primary explanatory feature. Complete or partial real billing is attached tenant-locally as economic calibration/labels and may enter the global layer only as rights-cleared privacy-gated generalized labels. The canonical architecture model must remain useful without billing and accept later true billing without redesign.",
+    "p0_ci_conclusion": "success",
+    "p0_ci_event": "push",
+    "p0_ci_head": "fe14fd6f737841b2668dc32d3fe2fac2dc2991c1",
+    "p0_ci_run_id": 32971013235,
+    "p0_ci_workflow": "BEETLEJUICE Product CI",
+    "p0_pull_request": 1,
+    "p0_verified_at_utc": "2026-08-26T12:53:30Z"
+  },
+  "last_verified_commit": "c2cd8f593120c9ab36886c52ca75fe02b00748dd",
+  "next_action": "IMPLEMENT_AND_EXECUTE_P0_5_ARCHITECTURE_LEARNING_AND_BILLING_CALIBRATION_GATE_BEFORE_P1",
+  "p0_5_checks": {
+    "agent_task_model_provenance_confidence": false,
+    "architecture_learning_hypotheses_falsifiable": false,
+    "architecture_reconstruction_manual_ground_truth": false,
+    "architecture_schema_topology_policy_representation": false,
+    "billing_complete_evidence_accounting": false,
+    "billing_no_evidence_honesty_and_architecture_utility": false,
+    "billing_partial_evidence_honesty": false,
+    "certain_structural_waste_precision_review": false,
+    "classification_manual_ground_truth": false,
+    "determinism_on_frozen_real_evidence": false,
+    "economic_or_learnable_corpus_path_proven": false,
+    "identifiable_primary_corpus_5_plus": false,
+    "integration_ci_green_after_repairs": false,
+    "local_real_billing_attachable_without_schema_redesign": false,
+    "outcome_manual_ground_truth": false,
+    "pagination_large_history": false,
+    "privacy_boundaries_preserved": false,
+    "privacy_safe_global_architecture_export": false,
+    "rate_limit_network_adversarial": false,
+    "real_github_https_positive_path": false,
+    "real_world_report_persisted": false,
+    "secondary_messy_robustness_set": false,
+    "zero_crash_or_typed_refusal": false
   },
   "p0_5_target": {
-    "objective": "real-world architecture learning plus local billing calibration viability gate",
+    "exit_status": "P0_5_READY",
     "minimum_real_repositories": 5,
+    "objective": "real-world architecture learning plus local billing calibration viability gate",
     "preferred_real_repositories": 10,
-    "report": "reports/real-world-robustness.md",
-    "exit_status": "P0_5_READY"
+    "report": "reports/real-world-robustness.md"
+  },
+  "p0_checks": {
+    "canonical_agentic_task": true,
+    "certain_waste_detector": true,
+    "cost_accounting": true,
+    "critical_tests": true,
+    "economic_product_surface": true,
+    "github_fixture_ingestion": true,
+    "integration_ci_green": true,
+    "outcome_attribution": true,
+    "privacy_safe_global_export": true,
+    "quickstart_docs": true,
+    "real_read_only_github_mode": true,
+    "synthetic_demo": true
   },
   "p1_target": {
     "objective": "installable GitHub App prototype AFTER P0.5",
@@ -117,5 +111,11 @@
       "explicit credential/environment setup documentation",
       "under-five-minute target when sufficient history is available"
     ]
+  },
+  "schema_version": "1",
+  "status": "BUILDING",
+  "viability_paths": {
+    "path_1": "COMPLETE_ECONOMIC_LABELS: sufficiently attributed complete billing for a useful subset supports true measured total cost/outcome labels on architecture rows.",
+    "path_2": "ARCHITECTURE_FIRST_CALIBRATION: clean architecture/outcome/resource rows are learnable before complete billing, and true billing can later attach as calibration labels without redefining the canonical model."
   }
 }
