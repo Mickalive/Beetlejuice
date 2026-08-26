@@ -40,7 +40,8 @@ jobs:
             --json databaseId,status,conclusion,createdAt,headSha 2>/dev/null || echo '[]')
 
           # A control-plane change makes older factory executions unsafe to keep alive.
-          # Cancel only stale runs; never cancel the factory run created by this same commit.
+          # Keep only the factory run created by this exact commit. Use force-cancel as a
+          # fallback because GitHub jobs guarded by always() can survive ordinary cancel.
           if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
             CHANGED=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}" \
               --jq '.files[]?.filename' 2>/dev/null || true)
@@ -49,11 +50,12 @@ jobs:
                 [[ -n "$RUN_ID" ]] || continue
                 RUN_SHA=$(jq -r --argjson id "$RUN_ID" '.[] | select(.databaseId == $id) | .headSha' <<<"$RUNS")
                 if [[ "$RUN_SHA" != "$GITHUB_SHA" ]]; then
-                  echo "Cancelling stale factory run $RUN_ID at $RUN_SHA after control-plane update $GITHUB_SHA"
+                  echo "Stopping stale factory run $RUN_ID at $RUN_SHA after control-plane update $GITHUB_SHA"
                   gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/cancel" >/dev/null 2>&1 || true
+                  gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/force-cancel" >/dev/null 2>&1 || true
                 fi
               done < <(jq -r '.[] | select(.status != "completed") | .databaseId' <<<"$RUNS")
-              echo "Stale-cycle cancellation requested; the factory run for this control-plane version may now proceed."
+              echo "Stale factory executions stopped; only this control-plane revision may proceed."
               exit 0
             fi
           fi
