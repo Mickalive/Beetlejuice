@@ -1,9 +1,14 @@
-# Proposed CI test-count guard fix (audit A6/R6) — pending `workflows` permission
+# Proposed CI changes (audit A6/R6 + self-observable CI) — pending `workflows` permission
 
-## Why this is not landed on the pushed branch
+Status: **STILL PENDING as of cycle 32941279561 close (2026-08-26).** The exact
+commit below was prepared, committed locally (`c5e4e99` on `lab/integration`)
+and pushed this cycle; the remote rejected it again with the same error. The
+branch was reset to `5799144`; the content is preserved here verbatim.
 
-The integration credential for this factory can push product code but the
-remote rejected any commit touching `.github/workflows/*`:
+## Why this cannot land from the factory environment
+
+The factory credential can push product code but the remote rejects any commit
+touching `.github/workflows/*`:
 
 ```
 ! [remote rejected] lab/integration -> lab/integration
@@ -11,15 +16,48 @@ remote rejected any commit touching `.github/workflows/*`:
    `.github/workflows/ci.yml` without `workflows` permission)
 ```
 
-Landing this change requires a one-time action by a maintainer (or granting
-the factory App the `workflows` permission). The exact content below was
-executed locally and behaves correctly: it counts **57** first-party test files
-on the integrated tree, versus 149 when vendored `.opencode/node_modules` zod
-tests leak into the count (147 of 149 files were vendored — audit E4).
+Fresh evidence this cycle: push of `c5e4e99` rejected 2026-08-26; public API
+still shows `total_count=0` Actions runs ever on `lab/integration`.
 
-Note: the OLD guard still passes green on the integrated tree because real
-product tests exist; this fix removes the false-green *class* of failure, it
-does not fix an active red.
+## Why `workflow_dispatch` is the decisive addition
+
+The factory credential CAN already reach the dispatch endpoint — this cycle's
+probe returned the *trigger-specific* error, not an authorization error:
+
+```
+POST /repos/Mickalive/Beetlejuice/actions/workflows/ci.yml/dispatches {ref:"lab/integration"}
+HTTP 422: {"message":"Workflow does not have 'workflow_dispatch' trigger"}
+```
+
+GitHub documents that events triggered by a workflow's own token do not start
+new runs **with the exception of `workflow_dispatch` and
+`repository_dispatch`**. Once the two-line trigger exists, the autonomous loop
+can start and observe Product CI on the integration candidate itself — no user
+token required — and flip `integration_ci_green` from a real observed run.
+
+**Smallest possible external action: grant the factory App the `workflows`
+permission (one setting).** After that, no further human action is needed:
+next cycle lands this commit, dispatches CI on `lab/integration`, and reads the
+conclusion via the runs API. Alternative single action with identical effect:
+merge `lab/integration` → `main` from any workflows-capable/user context
+(push-to-main fires CI and fixes the red default branch at once).
+
+## Exact replacement for `.github/workflows/ci.yml` trigger block
+
+```yaml
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - lab/integration
+  # workflow_dispatch is the documented exception to GitHub's rule that events
+  # triggered by a workflow's own token do not start runs: an authenticated
+  # dispatch (actions:write) DOES create a run. This lets the autonomous factory
+  # start and observe Product CI on the integration candidate without any
+  # user-side push. See reports/ci-guard-proposal.md.
+  workflow_dispatch:
+```
 
 ## Exact replacement for the "Require a real test suite" step in `.github/workflows/ci.yml`
 
@@ -47,6 +85,11 @@ does not fix an active red.
           echo "Detected $TEST_COUNT first-party test file(s)."
 ```
 
-Verified locally on the integrated tree (`find … | wc -l`): **57 ≥ 20 → pass**.
-On a scaffold-only checkout with no first-party tests: **0 < 20 → fail** (the
-vacuous-green hole closes).
+## Local verification (re-executed this cycle on head `5799144`)
+
+- First-party guard expression: **59 ≥ 20 → pass** (59 first-party test files).
+- Old guard expression: 59 ≥ 1 → pass (the old floor still holds on the real
+  product tree; this fix removes the false-green *class*, it does not fix an
+  active red).
+- On a scaffold-only checkout with no first-party tests: **0 < 20 → fail**
+  (vacuous-green hole closes).
