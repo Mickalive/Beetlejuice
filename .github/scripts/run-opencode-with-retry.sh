@@ -100,6 +100,21 @@ stage_control_plane() {
   done
 }
 
+restore_durable_progress_state() {
+  # Policy/instructions are authoritative from main, but product progress is
+  # cumulative on lab/integration. Several workflow stages historically copied
+  # main/state over the integration checkout; repair that before every agent so
+  # a later stage can never erase verified progress from an earlier cycle/stage.
+  if git fetch -q origin lab/integration:refs/remotes/origin/lab/integration 2>/dev/null \
+    && git cat-file -e "origin/lab/integration:state/factory.json" 2>/dev/null; then
+    mkdir -p state
+    git show "origin/lab/integration:state/factory.json" > state/factory.json
+    echo "BEETLEJUICE_DURABLE_STATE_SOURCE=lab/integration"
+  else
+    echo "BEETLEJUICE_DURABLE_STATE_SOURCE=current-checkout"
+  fi
+}
+
 validate_agent_card() {
   local requested="" prev="" arg marker count
   local registry="docs/agents/AGENT_CARDS.md"
@@ -117,6 +132,7 @@ validate_agent_card() {
 }
 
 stage_control_plane
+restore_durable_progress_state
 START_HEAD=$(git rev-parse HEAD 2>/dev/null || echo "")
 validate_agent_card "${RUN_ARGS[@]}" || exit $?
 
@@ -189,8 +205,8 @@ while (( attempt <= MAX_ATTEMPTS )); do
     echo "BEETLEJUICE_OX_RETRIES_EXHAUSTED attempts=$MAX_ATTEMPTS model=$OX_MODEL" >&2
     restore_control_plane || true
     # Exit non-zero. The Product Factory completes as failed and the Factory
-    # Supervisor's workflow_run trigger re-derives continue=true from durable
-    # state and launches a fresh factory cycle rather than changing model.
+    # Supervisor's workflow_run trigger re-derives work from durable state and
+    # launches a fresh Ox-only cycle instead of silently changing model.
     exit 75
   fi
 
