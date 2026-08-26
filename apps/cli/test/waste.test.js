@@ -252,3 +252,41 @@ test("R4 guard keeps the legitimate strictly-later supersession finding", () => 
   assert.equal(r.findings[0].rule_version, "1.1.0");
   assert.ok(r.findings[0].explanation.includes("strictly later"));
 });
+
+// WORD-1 (product audit): the abort-rule explanation must never claim more
+// than the evidence shows — "ran to completion" ONLY when ended_at is recorded.
+function abortedTaskBundle(executionExtra) {
+  return {
+    schema_version: "2",
+    normalization_version: "1",
+    collector_version: "test-1.0.0",
+    records: [
+      {
+        record_type: "agentic_task",
+        task_id: "T-WORD1",
+        started_at: "2026-08-10T09:00:00Z",
+        ended_at: null,
+        aborted_at: "2026-08-10T10:00:00Z",
+        outcome: { status: "aborted" },
+        executions: [exec("e-01", "2026-08-10T11:00:00Z", executionExtra)],
+      },
+    ],
+  };
+}
+
+test("WORD-1: 'ran to completion' is claimed only when ended_at is recorded", () => {
+  // No end recorded -> the explanation must rest on the START evidence alone.
+  const withoutEnd = detectCertainWaste(
+    validateNormalizedBundle(abortedTaskBundle({})).records
+  ).findings[0];
+  assert.match(withoutEnd.explanation, /started afterwards;/);
+  assert.doesNotMatch(withoutEnd.explanation, /ran to completion/);
+
+  // End recorded -> the completion claim is backed by explicit evidence.
+  const withEnd = detectCertainWaste(
+    validateNormalizedBundle(abortedTaskBundle({ ended_at: "2026-08-10T12:00:00Z" })).records
+  ).findings[0];
+  assert.match(withEnd.explanation, /ran to completion \(ended 2026-08-10T12:00:00Z\)/);
+  assert.equal(withEnd.rule_id, "EXECUTION_AFTER_TASK_ABORT");
+  assert.equal(withEnd.rule_version, "1.0.1");
+});

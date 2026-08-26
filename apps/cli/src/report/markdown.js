@@ -22,6 +22,13 @@ function renderProvenance(report) {
   return `provenance: normalized-input contract v${p.canonical_schema_version} · normalization v${p.normalization_version} · collector ${p.collector_version} · read-only: ${p.read_only}`;
 }
 
+/** Deterministic disclosure of the operator classification policy (real mode). */
+function renderClassificationPolicy(cp) {
+  const actors = cp.bot_actors.length > 0 ? cp.bot_actors.join(", ") : "none";
+  const prefixes = cp.branch_prefixes.length > 0 ? cp.branch_prefixes.join(", ") : "none";
+  return `classification policy: actor allowlist [${actors}] (${cp.bot_actors_source}) · branch prefixes [${prefixes}] (${cp.branch_prefixes_source})`;
+}
+
 function renderHeadline(report) {
   const h = report.headline;
   const o = h.outcomes;
@@ -212,6 +219,7 @@ export function renderMarkdownReport(report) {
 
 mode: ${modeLines[report.mode] ?? report.mode}
 ${renderProvenance(report)}
+${report.classification_policy ? renderClassificationPolicy(report.classification_policy) : ""}
 
 ${renderHeadline(report)}
 

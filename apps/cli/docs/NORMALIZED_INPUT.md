@@ -35,10 +35,14 @@ Two seams, ONE report model:
 ### Producer-side helper (A7 seam contract)
 
 The envelope is produced by a committed, tested helper in this package — the
-contract is enforced by construction, not by prose:
+contract is enforced by construction, not by prose. Two producers ship today:
+this generic in-package helper (any adapter or tenant pipeline) and the GitHub
+adapter's own evidence-driven producer (`@beetlejuice/github`
+`buildNormalizedBundle`, described after the snippet). Both run the same
+validator, so neither can emit an envelope the consumer would reject:
 
 ```js
-import { buildNormalizedBundle } from "apps/cli/src/index.js";
+import { buildNormalizedBundle } from "@beetlejuice/product-cli";
 
 const bundle = buildNormalizedBundle(normalizedRecords, {
   collector_version: "my-adapter-1.2.0", // required provenance
@@ -88,6 +92,16 @@ Adapter mapping guidance for `outcome.status`: merged-PR evidence → `accepted`
 explicit terminal failure or closed-unmerged PR → `failed`; abort/objective
 disappeared → `aborted`; anything else → `unresolved`. Never guess success.
 
+**Known intentional divergence (audit SEAM-DIV).** For closed-without-merge
+evidence the two committed producers deliberately disagree on vocabulary while
+agreeing on economics: the GitHub adapter's *event* path (`assembleAudit` →
+`TenantLedger`) attributes `failed` (a PR was explicitly closed without
+merging), while its *normalized-bundle* path (`buildNormalizedBundle`)
+attributes `aborted` (the objective disappeared without a terminal failure
+signal). Both are conservative non-success attributions — neither is ever
+counted as a successful outcome and both keep full cost visible — so reports
+from the two seams may label such tasks differently by design.
+
 ## Execution
 
 | Field | Required | Notes |
@@ -129,8 +143,11 @@ vocabularies:
    recorded failure on the retry itself. A retry that succeeded is NEVER waste
    (repair R2 of audit defect D2); abstentions counted as
    `retry_without_recorded_failure`.
-3. `EXECUTION_AFTER_TASK_ABORT` v1.0.0 → class `null` (product-surface extension;
+3. `EXECUTION_AFTER_TASK_ABORT` v1.0.1 → class `null` (product-surface extension;
    no core equivalent yet). Executions starting strictly after `aborted_at`.
+   The explanation claims "ran to completion" only when the execution recorded
+   an `ended_at`; otherwise it rests on the start-after-abort evidence alone
+   (audit WORD-1).
 
 ## Seam B — canonical-core audit export (`export_version` `"1"`)
 
@@ -187,7 +204,7 @@ The legacy draft contract v1 (integer cents; provider-flavored statuses
 lane snapshot, but migration discipline applies:
 
 ```js
-import { migrateNormalizedBundleV1ToV2 } from "apps/cli/src/index.js";
+import { migrateNormalizedBundleV1ToV2 } from "@beetlejuice/product-cli";
 const { ok, errors, bundle } = migrateNormalizedBundleV1ToV2(legacyV1Bundle);
 // bundle.schema_version === "2"
 // bundle.normalization_version ends with "+migrate-v1-to-v2"

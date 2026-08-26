@@ -22,7 +22,7 @@ export const WASTE_RULE_ORDER = Object.freeze([
 export const RULE_VERSIONS = Object.freeze({
   SUPERSEDED_EXECUTION: "1.1.0",
   IDENTICAL_RETRY_AFTER_DETERMINISTIC_FAILURE: "1.1.0",
-  EXECUTION_AFTER_TASK_ABORT: "1.0.0",
+  EXECUTION_AFTER_TASK_ABORT: "1.0.1", // 1.0.1: explanation no longer claims completion without ended_at (audit WORD-1)
 });
 
 /**
@@ -179,11 +179,15 @@ function findExecutionAfterAbortWaste(record) {
     const startTs = Date.parse(execution.started_at);
     if (!Number.isFinite(startTs)) continue;
     if (startTs <= abortTs) continue; // started while the objective still existed
+    // WORD-1: the avoidability claim rests on the START being after the abort.
+    // Only say "ran to completion" when an end was actually recorded — never
+    // claim more than the evidence shows.
+    const ranToCompletion = execution.ended_at !== null && execution.ended_at !== undefined;
     findings.push(
       makeFinding(
         "EXECUTION_AFTER_TASK_ABORT",
         execution,
-        `Task was aborted at ${record.aborted_at} (objective disappeared), but execution ${execution.execution_id} started afterwards and ran to completion; spend after the objective vanished demonstrably could not contribute to any accepted outcome.`,
+        `Task was aborted at ${record.aborted_at} (objective disappeared), but execution ${execution.execution_id} started afterwards${ranToCompletion ? ` and ran to completion (ended ${execution.ended_at})` : ""}; spend after the objective vanished demonstrably could not contribute to any accepted outcome.`,
         `Propagate task cancellation to running agents/executions so no compute starts after the objective disappears.`,
         [
           executionCostEvidence(record.task_id, execution),
