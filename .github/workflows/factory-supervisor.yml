@@ -29,6 +29,90 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      - name: Purge obsolete completed Actions runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Keep the Actions page readable. Durable product evidence belongs in
+          # state/ and reports/, not in hundreds of stale run rows.
+          KEEP_PER_ACTIVE_WORKFLOW=5
+          ACTIVE_NAMES=(
+            "BEETLEJUICE Product CI"
+            "BEETLEJUICE Product Factory"
+            "BEETLEJUICE Factory Supervisor"
+          )
+
+          STATE=$(gh api -H 'Accept: application/vnd.github.raw+json' \
+            "repos/${GITHUB_REPOSITORY}/contents/state/factory.json?ref=main" 2>/dev/null || echo '{}')
+          PRESERVE_IDS=$(jq -r '
+            .. | objects | to_entries[]?
+            | select(.key | test("run_id$"))
+            | .value
+            | select(type == "number")
+          ' <<<"$STATE" 2>/dev/null | sort -u || true)
+
+          mapfile -t RUN_ROWS < <(
+            gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs?per_page=100" \
+              --jq '.workflow_runs[] | [.id,.name,.status,.created_at] | @tsv'
+          )
+
+          declare -A KEPT_BY_NAME=()
+          DELETED=0
+          PRESERVED=0
+
+          is_active_name() {
+            local candidate="$1"
+            for active in "${ACTIVE_NAMES[@]}"; do
+              [[ "$candidate" == "$active" ]] && return 0
+            done
+            return 1
+          }
+
+          is_evidence_run() {
+            local candidate="$1"
+            grep -qx "$candidate" <<<"$PRESERVE_IDS" 2>/dev/null
+          }
+
+          # GitHub returns newest runs first. Keep five completed runs for each
+          # current workflow. For workflow names no longer present in the repo,
+          # remove every completed run unless state/factory.json cites it.
+          for row in "${RUN_ROWS[@]}"; do
+            IFS=$'\t' read -r RUN_ID RUN_NAME RUN_STATUS CREATED_AT <<<"$row"
+            [[ -n "$RUN_ID" ]] || continue
+
+            if [[ "$RUN_STATUS" != "completed" ]]; then
+              PRESERVED=$((PRESERVED + 1))
+              continue
+            fi
+
+            if is_evidence_run "$RUN_ID"; then
+              echo "Preserving evidence run $RUN_ID ($RUN_NAME)"
+              PRESERVED=$((PRESERVED + 1))
+              continue
+            fi
+
+            if is_active_name "$RUN_NAME"; then
+              COUNT=${KEPT_BY_NAME["$RUN_NAME"]:-0}
+              if (( COUNT < KEEP_PER_ACTIVE_WORKFLOW )); then
+                KEPT_BY_NAME["$RUN_NAME"]=$((COUNT + 1))
+                PRESERVED=$((PRESERVED + 1))
+                continue
+              fi
+            fi
+
+            echo "Deleting obsolete completed run $RUN_ID [$RUN_NAME] $CREATED_AT"
+            if gh api --method DELETE "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}" >/dev/null 2>&1; then
+              DELETED=$((DELETED + 1))
+            else
+              echo "::warning::Could not delete run $RUN_ID"
+            fi
+          done
+
+          echo "Actions cleanup complete: deleted=$DELETED preserved=$PRESERVED"
+
       - name: Re-derive continuation from durable state
         env:
           GH_TOKEN: ${{ github.token }}
@@ -39,23 +123,23 @@ jobs:
           RUNS=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow factory-loop.yml --limit 50 \
             --json databaseId,status,conclusion,createdAt,headSha 2>/dev/null || echo '[]')
 
-          # A control-plane change makes older factory executions unsafe to keep alive.
-          # Keep only the factory run created by this exact commit. Use force-cancel as a
-          # fallback because GitHub jobs guarded by always() can survive ordinary cancel.
+          # Changing the factory execution workflow makes older factory executions
+          # unsafe. A supervisor-only maintenance change (for example run cleanup)
+          # must NOT destroy useful product work already in flight.
           if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
             CHANGED=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}" \
               --jq '.files[]?.filename' 2>/dev/null || true)
-            if grep -Eq '^\.github/workflows/(factory-loop|factory-supervisor)\.yml$' <<<"$CHANGED"; then
+            if grep -Eq '^\.github/workflows/factory-loop\.yml$' <<<"$CHANGED"; then
               while IFS= read -r RUN_ID; do
                 [[ -n "$RUN_ID" ]] || continue
                 RUN_SHA=$(jq -r --argjson id "$RUN_ID" '.[] | select(.databaseId == $id) | .headSha' <<<"$RUNS")
                 if [[ "$RUN_SHA" != "$GITHUB_SHA" ]]; then
-                  echo "Stopping stale factory run $RUN_ID at $RUN_SHA after control-plane update $GITHUB_SHA"
+                  echo "Stopping stale factory run $RUN_ID at $RUN_SHA after factory control-plane update $GITHUB_SHA"
                   gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/cancel" >/dev/null 2>&1 || true
                   gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/force-cancel" >/dev/null 2>&1 || true
                 fi
               done < <(jq -r '.[] | select(.status != "completed") | .databaseId' <<<"$RUNS")
-              echo "Stale factory executions stopped; only this control-plane revision may proceed."
+              echo "Stale factory executions stopped; only this factory-loop revision may proceed."
               exit 0
             fi
           fi
@@ -83,9 +167,9 @@ jobs:
               echo "Factory state is $STATUS; no autonomous relaunch. next_action=$NEXT_ACTION"
               exit 0
               ;;
-            P0_READY)
+            P0_READY|P0_5_READY)
               if [[ "$CONTINUE" != true ]]; then
-                echo "P0 is ready and state does not request more autonomous work."
+                echo "$STATUS and state does not request more autonomous work."
                 exit 0
               fi
               ;;
