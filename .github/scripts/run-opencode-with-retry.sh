@@ -12,7 +12,9 @@ CHILD_PID=""
 MONITOR_PID=""
 START_HEAD=""
 
-NETWORK_RE='(network_error|NetworkError|network error|fetch failed|APIConnectionError|ECONNRESET|ECONNREFUSED|EAI_AGAIN|ENETUNREACH|ENOTFOUND|ETIMEDOUT|timed out|timeout|socket hang up|connection (reset|refused|closed|error)|upstream.*(reset|closed|unavailable|error)|HTTP[^0-9]*(429|500|502|503|504)|status[^0-9]*(429|500|502|503|504)|too many requests|rate.?limit|service unavailable|bad gateway|gateway timeout|temporar(y|ily) unavailable|TLS|SSL.*error)'
+# Retry transport/provider failures, including OpenCode's generic server-side
+# UnknownError. Deterministic agent/code failures intentionally do not match.
+NETWORK_RE='(network_error|NetworkError|network error|fetch failed|APIConnectionError|UnknownError|Unexpected server error|internal server error|server error.*check server logs|ECONNRESET|ECONNREFUSED|EAI_AGAIN|ENETUNREACH|ENOTFOUND|ETIMEDOUT|timed out|timeout|socket hang up|connection (reset|refused|closed|error)|upstream.*(reset|closed|unavailable|error)|HTTP[^0-9]*(429|500|502|503|504)|status[^0-9]*(429|500|502|503|504)|too many requests|rate.?limit|service unavailable|bad gateway|gateway timeout|temporar(y|ily) unavailable|TLS|SSL.*error)'
 
 CONTROL_PATHS=(
   "AGENTS.md"
@@ -155,7 +157,7 @@ while (( attempt <= MAX_ATTEMPTS )); do
 
   if [[ "$rc" -eq 75 ]] || grep -Eiq "$NETWORK_RE" "$LOG"; then
     if (( attempt < MAX_ATTEMPTS )); then
-      echo "::warning::Transient OpenCode/network failure; retrying after ${RETRY_DELAY}s."
+      echo "::warning::Transient OpenCode/provider failure; retrying after ${RETRY_DELAY}s."
       sleep "$RETRY_DELAY"
       attempt=$((attempt + 1))
       continue
@@ -165,7 +167,7 @@ while (( attempt <= MAX_ATTEMPTS )); do
     exit 75
   fi
 
-  echo "OpenCode failed without a transient-network signature (rc=$rc). Preserving failure for supervisor/integration." >&2
+  echo "OpenCode failed without a transient-network/provider signature (rc=$rc). Preserving failure for supervisor/integration." >&2
   restore_control_plane || true
   exit "$rc"
 done
