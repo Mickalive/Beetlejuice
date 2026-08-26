@@ -21,7 +21,7 @@ permissions:
 
 concurrency:
   group: beetlejuice-factory-supervisor
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   continuity:
