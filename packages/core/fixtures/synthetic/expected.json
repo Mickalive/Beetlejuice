@@ -1,0 +1,118 @@
+{
+  "fixture": "synthetic-v1",
+  "description": "Hand-verified expected economics for the deterministic synthetic dataset. Ten tasks: 7 accepted (1 reverted), 1 failed, 1 aborted, 1 unresolved; three certain-waste positive controls and transient/new-revision negative controls. All amounts are integer micro-USD.",
+  "event_count": 89,
+  "totals": {
+    "tasks": 10,
+    "accepted": 7,
+    "failed": 1,
+    "aborted": 1,
+    "unresolved": 1,
+    "acceptedWithRevert": 1,
+    "withHumanRework": 1
+  },
+  "cost": {
+    "currency": "USD",
+    "unit": "micro_usd",
+    "knownMicroUsd": 22960000,
+    "unknownComponentCount": 2,
+    "byKindMicroUsd": {
+      "inference": 18800000,
+      "tools": 300000,
+      "ci": 3650000,
+      "compute": 140000,
+      "validation": 70000,
+      "human": 0
+    },
+    "costPerAcceptedOutcomeMicroUsd": 3280000,
+    "accountingBalanced": true
+  },
+  "waste": {
+    "findingsCount": 4,
+    "certainlyAvoidableMicroUsd": 3300000,
+    "ratioOfKnownCost": 0.143728,
+    "byRuleMicroUsd": {
+      "WASTE_DET_RETRY_V1": 1800000,
+      "WASTE_DUP_CI_V1": 400000,
+      "WASTE_EXEC_SUPERSEDED_V1": 1100000
+    },
+    "expectedFindingIds": [
+      "WASTE_DET_RETRY_V1/TASK-006/1",
+      "WASTE_DET_RETRY_V1/TASK-006/2",
+      "WASTE_DUP_CI_V1/TASK-005/1",
+      "WASTE_EXEC_SUPERSEDED_V1/TASK-007/1"
+    ],
+    "expectedFindings": [
+      {
+        "finding_id": "WASTE_DET_RETRY_V1/TASK-006/1",
+        "rule_id": "WASTE_DET_RETRY_V1",
+        "task_ref": "TASK-006",
+        "confidence": "certain",
+        "wasted_micro_usd": 900000,
+        "evidence_refs": ["MI-006-2"],
+        "evidence_units": [
+          { "ref": "MI-006-2", "kind": "inference", "micro_usd": 900000, "quantified": true }
+        ],
+        "unquantified_evidence_refs": []
+      },
+      {
+        "finding_id": "WASTE_DET_RETRY_V1/TASK-006/2",
+        "rule_id": "WASTE_DET_RETRY_V1",
+        "task_ref": "TASK-006",
+        "confidence": "certain",
+        "wasted_micro_usd": 900000,
+        "evidence_refs": ["MI-006-3"],
+        "evidence_units": [
+          { "ref": "MI-006-3", "kind": "inference", "micro_usd": 900000, "quantified": true }
+        ],
+        "unquantified_evidence_refs": []
+      },
+      {
+        "finding_id": "WASTE_DUP_CI_V1/TASK-005/1",
+        "rule_id": "WASTE_DUP_CI_V1",
+        "task_ref": "TASK-005",
+        "confidence": "certain",
+        "wasted_micro_usd": 400000,
+        "evidence_refs": ["CI-005-2"],
+        "evidence_units": [
+          { "ref": "CI-005-2", "kind": "ci", "micro_usd": 400000, "quantified": true }
+        ],
+        "unquantified_evidence_refs": []
+      },
+      {
+        "finding_id": "WASTE_EXEC_SUPERSEDED_V1/TASK-007/1",
+        "rule_id": "WASTE_EXEC_SUPERSEDED_V1",
+        "task_ref": "TASK-007",
+        "confidence": "certain",
+        "wasted_micro_usd": 1100000,
+        "evidence_refs": ["MI-007-1"],
+        "evidence_units": [
+          { "ref": "MI-007-1", "kind": "inference", "micro_usd": 1100000, "quantified": true }
+        ],
+        "unquantified_evidence_refs": []
+      }
+    ]
+  },
+  "dataQuality": {
+    "outcomeAttribution": {
+      "measured": 9,
+      "partial": 1
+    }
+  },
+  "per_task": {
+    "TASK-001": { "outcome": "accepted", "reverted": false, "attribution": "measured", "known_micro_usd": 4200000, "waste_micro_usd": 0 },
+    "TASK-002": { "outcome": "failed", "reverted": false, "attribution": "measured", "known_micro_usd": 1250000, "waste_micro_usd": 0 },
+    "TASK-003": { "outcome": "aborted", "reverted": false, "attribution": "measured", "known_micro_usd": 800000, "waste_micro_usd": 0 },
+    "TASK-004": { "outcome": "accepted", "reverted": false, "attribution": "measured", "known_micro_usd": 2700000, "waste_micro_usd": 0 },
+    "TASK-005": { "outcome": "accepted", "reverted": false, "attribution": "measured", "known_micro_usd": 1800000, "waste_micro_usd": 400000 },
+    "TASK-006": { "outcome": "accepted", "reverted": false, "attribution": "measured", "known_micro_usd": 3900000, "waste_micro_usd": 1800000 },
+    "TASK-007": { "outcome": "accepted", "reverted": false, "attribution": "measured", "known_micro_usd": 2750000, "waste_micro_usd": 1100000 },
+    "TASK-008": { "outcome": "accepted", "reverted": false, "attribution": "measured", "known_micro_usd": 3060000, "waste_micro_usd": 0 },
+    "TASK-009": { "outcome": "unresolved", "reverted": false, "attribution": "partial", "known_micro_usd": 500000, "waste_micro_usd": 0 },
+    "TASK-010": { "outcome": "accepted", "reverted": true, "attribution": "measured", "known_micro_usd": 2000000, "waste_micro_usd": 0 }
+  },
+  "export": {
+    "export_type": "beetlejuice_core_audit_export",
+    "export_version": "1"
+  }
+}

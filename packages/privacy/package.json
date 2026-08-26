@@ -1,0 +1,16 @@
+{
+  "name": "@beetlejuice/privacy",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Executable privacy boundary: privacy gate, unlinkable-by-default global exporter, tenant-audit producer mapping, bucketing/generalization, rare-combination suppression and privacy-risk reporting.",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

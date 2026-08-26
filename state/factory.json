@@ -1,23 +1,48 @@
 {
   "schema_version": "1",
-  "status": "BUILDING",
+  "status": "P0_READY",
   "continue": true,
-  "next_action": "IMPLEMENT_P0_PARALLEL_LANES",
+  "next_action": "IMPLEMENT_P1_INSTALLABLE_GITHUB_APP_PROTOTYPE",
   "blocking_reason": null,
   "p0_checks": {
-    "canonical_agentic_task": false,
-    "github_fixture_ingestion": false,
-    "cost_accounting": false,
-    "outcome_attribution": false,
-    "certain_waste_detector": false,
-    "synthetic_demo": false,
-    "real_read_only_github_mode": false,
-    "economic_product_surface": false,
-    "privacy_safe_global_export": false,
-    "critical_tests": false,
-    "quickstart_docs": false,
-    "integration_ci_green": false
+    "canonical_agentic_task": true,
+    "github_fixture_ingestion": true,
+    "cost_accounting": true,
+    "outcome_attribution": true,
+    "certain_waste_detector": true,
+    "synthetic_demo": true,
+    "real_read_only_github_mode": true,
+    "economic_product_surface": true,
+    "privacy_safe_global_export": true,
+    "critical_tests": true,
+    "quickstart_docs": true,
+    "integration_ci_green": true
   },
-  "last_verified_commit": null,
-  "cycle": 0
+  "last_verified_commit": "47237b4d57ebc338e43a0dfeb9db45c95a1767c6",
+  "cycle": 32957437769,
+  "evidence": {
+    "p0_verified_at_utc": "2026-08-26T12:51:00Z",
+    "p0_ci_run_id": 32970824140,
+    "p0_ci_workflow": "BEETLEJUICE Product CI",
+    "p0_ci_event": "pull_request",
+    "p0_ci_head": "47237b4d57ebc338e43a0dfeb9db45c95a1767c6",
+    "p0_ci_conclusion": "success",
+    "p0_pull_request": 1,
+    "local_verification": "459 tests / 459 pass / 0 fail / 0 skipped; deterministic synthetic demo; real-mode error handling and credential redaction verified",
+    "integration_report": "reports/integration-runtime-status.txt",
+    "adversarial_audit": "reports/latest-product-audit.md",
+    "previous_external_blocker": "Resolved by opening PR #1 from lab/integration to main, which triggered the existing pull_request Product CI without requiring the factory App to edit workflow files."
+  },
+  "p1_target": {
+    "objective": "installable GitHub App prototype",
+    "requirements": [
+      "least-privilege read-only permissions by default",
+      "webhook signature verification",
+      "installation and repository scoping",
+      "historical bootstrap audit",
+      "incremental event ingestion",
+      "explicit credential and environment setup documentation",
+      "under-five-minute target when sufficient history is available"
+    ]
+  }
 }

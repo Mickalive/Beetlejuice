@@ -1,0 +1,526 @@
+{
+  "schema_version": "2",
+  "normalization_version": "1",
+  "collector_version": "synthetic-fixture-1.0.0",
+  "records": [
+    {
+      "record_type": "agentic_task",
+      "task_id": "T-001",
+      "started_at": "2026-08-03T09:00:00Z",
+      "ended_at": "2026-08-03T11:30:00Z",
+      "source_adapter": {
+        "name": "synthetic",
+        "version": "1.0.0"
+      },
+      "outcome": {
+        "status": "accepted"
+      },
+      "executions": [
+        {
+          "execution_id": "e-01",
+          "agent": {
+            "family": "coding-agent",
+            "model_class": "frontier"
+          },
+          "started_at": "2026-08-03T09:00:00Z",
+          "ended_at": "2026-08-03T10:05:00Z",
+          "work_signature": "ws-sign-auth-v1",
+          "failure_category": "flaky",
+          "tokens": {
+            "input": 41200,
+            "output": 3800
+          },
+          "components": {
+            "inference": {
+              "basis": "measured",
+              "amount_micro_usd": 2400000
+            },
+            "tools": {
+              "basis": "measured",
+              "amount_micro_usd": 300000
+            },
+            "ci": {
+              "basis": "measured",
+              "amount_micro_usd": 800000
+            },
+            "compute": {
+              "basis": "measured",
+              "amount_micro_usd": 100000
+            }
+          },
+          "total_amount_micro_usd": 3600000
+        },
+        {
+          "execution_id": "e-02",
+          "agent": {
+            "family": "coding-agent",
+            "model_class": "frontier"
+          },
+          "started_at": "2026-08-03T10:10:00Z",
+          "ended_at": "2026-08-03T11:25:00Z",
+          "work_signature": "ws-sign-auth-v1",
+          "retry_of_execution_id": "e-01",
+          "tokens": {
+            "input": 39800,
+            "output": 4100
+          },
+          "components": {
+            "inference": {
+              "basis": "measured",
+              "amount_micro_usd": 2100000
+            },
+            "tools": {
+              "basis": "measured",
+              "amount_micro_usd": 250000
+            },
+            "ci": {
+              "basis": "measured",
+              "amount_micro_usd": 750000
+            },
+            "compute": {
+              "basis": "measured",
+              "amount_micro_usd": 100000
+            }
+          },
+          "total_amount_micro_usd": 3200000
+        }
+      ]
+    },
+    {
+      "record_type": "agentic_task",
+      "task_id": "T-002",
+      "started_at": "2026-08-05T08:00:00Z",
+      "ended_at": "2026-08-05T13:00:00Z",
+      "source_adapter": {
+        "name": "synthetic",
+        "version": "1.0.0"
+      },
+      "outcome": {
+        "status": "accepted"
+      },
+      "executions": [
+        {
+          "execution_id": "e-01",
+          "agent": {
+            "family": "coding-agent",
+            "model_class": "frontier"
+          },
+          "started_at": "2026-08-05T08:00:00Z",
+          "ended_at": "2026-08-05T09:40:00Z",
+          "work_signature": "ws-rate-limit-v1",
+          "superseded_by_execution_id": "e-03",
+          "tokens": {
+            "input": 51200,
+            "output": 5200
+          },
+          "components": {
+            "inference": {
+              "basis": "measured",
+              "amount_micro_usd": 3000000
+            },
+            "tools": {
+              "basis": "measured",
+              "amount_micro_usd": 400000
+            },
+            "ci": {
+              "basis": "measured",
+              "amount_micro_usd": 600000
+            },
+            "compute": {
+              "basis": "measured",
+              "amount_micro_usd": 150000
+            }
+          },
+          "total_amount_micro_usd": 4150000
+        },
+        {
+          "execution_id": "e-02",
+          "agent": {
+            "family": "coding-agent",
+            "model_class": "frontier"
+          },
+          "started_at": "2026-08-05T09:45:00Z",
+          "ended_at": "2026-08-05T11:20:00Z",
+          "work_signature": "ws-rate-limit-v2",
+          "tokens": {
+            "input": 44100,
+            "output": 3900
+          },
+          "components": {
+            "inference": {
+              "basis": "measured",
+              "amount_micro_usd": 1800000
+            },
+            "tools": {
+              "basis": "measured",
+              "amount_micro_usd": 300000
+            },
+            "ci": {
+              "basis": "measured",
+              "amount_micro_usd": 550000
+            },
+            "compute": {
+              "basis": "measured",
+              "amount_micro_usd": 120000
+            }
+          },
+          "total_amount_micro_usd": 2770000
+        },
+        {
+          "execution_id": "e-03",
+          "agent": {
+            "family": "coding-agent",
+            "model_class": "frontier"
+          },
+          "started_at": "2026-08-05T11:25:00Z",
+          "ended_at": "2026-08-05T12:50:00Z",
+          "work_signature": "ws-rate-limit-v2",
+          "tokens": {
+            "input": 46200,
+            "output": 4300
+          },
+          "components": {
+            "inference": {
+              "basis": "measured",
+              "amount_micro_usd": 1900000
+            },
+            "tools": {
+              "basis": "measured",
+              "amount_micro_usd": 350000
+            },
+            "ci": {
+              "basis": "measured",
+              "amount_micro_usd": 500000
+            },
+            "compute": {
+              "basis": "measured",
+              "amount_micro_usd": 120000
+            }
+          },
+          "total_amount_micro_usd": 2870000
+        }
+      ]
+    },
+    {
+      "record_type": "agentic_task",
+      "task_id": "T-003",
+      "started_at": "2026-08-07T14:00:00Z",
+      "ended_at": "2026-08-07T17:30:00Z",
+      "source_adapter": {
+        "name": "synthetic",
+        "version": "1.0.0"
+      },
+      "outcome": {
+        "status": "failed"
+      },
+      "executions": [
+        {
+          "execution_id": "e-01",
+          "agent": {
+            "family": "coding-agent",
+            "model_class": "frontier"
+          },
+          "started_at": "2026-08-07T14:00:00Z",
+          "ended_at": "2026-08-07T15:10:00Z",
+          "work_signature": "ws-mig-lock-v1",
+          "failure_category": "deterministic",
+          "tokens": {
+            "input": 30100,
+            "output": 2600
+          },
+          "components": {
+            "inference": {
+              "basis": "measured",
+              "amount_micro_usd": 1200000
+            },
+            "tools": {
+              "basis": "measured",
+              "amount_micro_usd": 200000
+            },
+            "ci": {
+              "basis": "measured",
+              "amount_micro_usd": 400000
+            },
+            "compute": {
+              "basis": "measured",
+              "amount_micro_usd": 80000
+            }
+          },
+          "total_amount_micro_usd": 1880000
+        },
+        {
+          "execution_id": "e-02",
+          "agent": {
+            "family": "coding-agent",
+            "model_class": "frontier"
+          },
+          "started_at": "2026-08-07T15:15:00Z",
+          "ended_at": "2026-08-07T16:05:00Z",
+          "work_signature": "ws-mig-lock-v1",
+          "retry_of_execution_id": "e-01",
+          "failure_category": "deterministic",
+          "tokens": {
+            "input": 29800,
+            "output": 2400
+          },
+          "components": {
+            "inference": {
+              "basis": "measured",
+              "amount_micro_usd": 1150000
+            },
+            "tools": {
+              "basis": "measured",
+              "amount_micro_usd": 200000
+            },
+            "ci": {
+              "basis": "measured",
+              "amount_micro_usd": 400000
+            },
+            "compute": {
+              "basis": "measured",
+              "amount_micro_usd": 80000
+            }
+          },
+          "total_amount_micro_usd": 1830000
+        },
+        {
+          "execution_id": "e-03",
+          "agent": {
+            "family": "coding-agent",
+            "model_class": "frontier"
+          },
+          "started_at": "2026-08-07T16:20:00Z",
+          "ended_at": "2026-08-07T17:25:00Z",
+          "work_signature": "ws-mig-lock-v2",
+          "tokens": {
+            "input": 31500,
+            "output": 2900
+          },
+          "components": {
+            "inference": {
+              "basis": "measured",
+              "amount_micro_usd": 1700000
+            },
+            "tools": {
+              "basis": "measured",
+              "amount_micro_usd": 220000
+            },
+            "ci": {
+              "basis": "measured",
+              "amount_micro_usd": 450000
+            },
+            "compute": {
+              "basis": "measured",
+              "amount_micro_usd": 90000
+            }
+          },
+          "total_amount_micro_usd": 2460000
+        }
+      ]
+    },
+    {
+      "record_type": "agentic_task",
+      "task_id": "T-004",
+      "started_at": "2026-08-06T09:00:00Z",
+      "ended_at": "2026-08-06T11:30:00Z",
+      "aborted_at": "2026-08-06T10:00:00Z",
+      "source_adapter": {
+        "name": "synthetic",
+        "version": "1.0.0"
+      },
+      "outcome": {
+        "status": "aborted"
+      },
+      "executions": [
+        {
+          "execution_id": "e-01",
+          "agent": {
+            "family": "coding-agent",
+            "model_class": "frontier"
+          },
+          "started_at": "2026-08-06T09:00:00Z",
+          "ended_at": "2026-08-06T09:55:00Z",
+          "work_signature": "ws-dedupe-import-v1",
+          "tokens": {
+            "input": 22100,
+            "output": 1800
+          },
+          "components": {
+            "inference": {
+              "basis": "measured",
+              "amount_micro_usd": 900000
+            },
+            "tools": {
+              "basis": "measured",
+              "amount_micro_usd": 150000
+            },
+            "compute": {
+              "basis": "measured",
+              "amount_micro_usd": 50000
+            }
+          },
+          "total_amount_micro_usd": 1100000
+        },
+        {
+          "execution_id": "e-02",
+          "agent": {
+            "family": "coding-agent",
+            "model_class": "frontier"
+          },
+          "started_at": "2026-08-06T10:30:00Z",
+          "ended_at": "2026-08-06T11:20:00Z",
+          "work_signature": "ws-dedupe-import-v1",
+          "tokens": {
+            "input": 26300,
+            "output": 2100
+          },
+          "components": {
+            "inference": {
+              "basis": "measured",
+              "amount_micro_usd": 1400000
+            },
+            "tools": {
+              "basis": "measured",
+              "amount_micro_usd": 250000
+            },
+            "ci": {
+              "basis": "measured",
+              "amount_micro_usd": 350000
+            },
+            "compute": {
+              "basis": "measured",
+              "amount_micro_usd": 70000
+            }
+          },
+          "total_amount_micro_usd": 2070000
+        },
+        {
+          "execution_id": "e-03",
+          "agent": {
+            "family": "coding-agent",
+            "model_class": "small"
+          },
+          "started_at": "2026-08-06T10:45:00Z",
+          "ended_at": "2026-08-06T11:25:00Z",
+          "work_signature": "ws-dedupe-import-v2",
+          "tokens": {
+            "input": 19800,
+            "output": 1500
+          },
+          "components": {
+            "inference": {
+              "basis": "measured",
+              "amount_micro_usd": 800000
+            },
+            "tools": {
+              "basis": "measured",
+              "amount_micro_usd": 100000
+            },
+            "compute": {
+              "basis": "measured",
+              "amount_micro_usd": 40000
+            }
+          },
+          "total_amount_micro_usd": 940000
+        }
+      ]
+    },
+    {
+      "record_type": "agentic_task",
+      "task_id": "T-005",
+      "started_at": "2026-08-12T10:00:00Z",
+      "ended_at": "2026-08-12T10:45:00Z",
+      "aborted_at": "2026-08-12T10:40:00Z",
+      "source_adapter": {
+        "name": "synthetic",
+        "version": "1.0.0"
+      },
+      "outcome": {
+        "status": "aborted"
+      },
+      "executions": [
+        {
+          "execution_id": "e-01",
+          "agent": {
+            "family": "coding-agent",
+            "model_class": "frontier"
+          },
+          "started_at": "2026-08-12T10:05:00Z",
+          "ended_at": "2026-08-12T10:35:00Z",
+          "work_signature": "ws-docs-sync-v1",
+          "tokens": {
+            "input": 24400,
+            "output": 2000
+          },
+          "components": {
+            "inference": {
+              "basis": "measured",
+              "amount_micro_usd": 1000000
+            },
+            "tools": {
+              "basis": "measured",
+              "amount_micro_usd": 100000
+            },
+            "ci": {
+              "basis": "measured",
+              "amount_micro_usd": 300000
+            },
+            "compute": {
+              "basis": "measured",
+              "amount_micro_usd": 50000
+            }
+          },
+          "total_amount_micro_usd": 1450000
+        }
+      ]
+    },
+    {
+      "record_type": "agentic_task",
+      "task_id": "T-006",
+      "started_at": "2026-08-13T09:00:00Z",
+      "ended_at": null,
+      "source_adapter": {
+        "name": "synthetic",
+        "version": "1.0.0"
+      },
+      "outcome": {
+        "status": "unresolved"
+      },
+      "executions": [
+        {
+          "execution_id": "e-01",
+          "agent": {
+            "family": "coding-agent",
+            "model_class": "frontier"
+          },
+          "started_at": "2026-08-13T09:00:00Z",
+          "ended_at": "2026-08-13T09:50:00Z",
+          "work_signature": "ws-cache-layer-v1",
+          "tokens": {
+            "input": 27500,
+            "output": 3100
+          },
+          "components": {
+            "inference": {
+              "basis": "estimated",
+              "amount_micro_usd": 1600000
+            },
+            "tools": {
+              "basis": "measured",
+              "amount_micro_usd": 200000
+            },
+            "ci": {
+              "basis": "unavailable",
+              "amount_micro_usd": null
+            },
+            "compute": {
+              "basis": "measured",
+              "amount_micro_usd": 50000
+            }
+          },
+          "total_amount_micro_usd": 1850000
+        }
+      ]
+    }
+  ]
+}

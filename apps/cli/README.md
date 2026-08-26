@@ -1,0 +1,77 @@
+# @beetlejuice/product-cli — audit report surface (WC-005)
+
+The user-facing economics surface: one command produces the complete agentic
+audit — total measured cost, successful outcomes, cost per successful outcome,
+certainly avoidable spend with exact evidence, and a data-quality section that
+separates **measured / estimated / unavailable** costs. Token counts are
+secondary diagnostics only. Read-only by construction.
+
+## Quickstart (no GitHub credentials, no network)
+
+From the repository root:
+
+```bash
+npm install --ignore-scripts
+npm run demo            # complete synthetic audit on stdout
+```
+
+Write artifacts instead of printing only:
+
+```bash
+npm run demo -- --out apps/cli/out   # writes out/audit-report.md + .json
+```
+
+`npm run demo` is deterministic: identical inputs produce byte-identical
+reports (pinned by `test/determinism.test.js`).
+
+## Real read-only modes
+
+| Mode | Command | Input contract |
+| --- | --- | --- |
+| real-github-read-only | `npm run demo -- --github OWNER/REPO` | live repository history collected with strictly GET requests; requires `BEETLEJUICE_GITHUB_TOKEN` (read-only PAT/App token). Missing token ⇒ exit 2 refusal, never a fabricated audit. PRs count as agentic only when matched by a classification policy: set `BEETLEJUICE_BOT_ACTORS` (bot logins → measured) and/or `BEETLEJUICE_BRANCH_PREFIXES` (branch prefixes → inferred; `-` disables); unset variables use a documented conservative default, and the effective policy is disclosed in every report. A policy matching zero PRs ⇒ exit 2 with guidance. Costs without operator billing evidence are reported as *unavailable*, not guessed. Wired internally through `collectHistory → assembleAudit → TenantLedger → exportCoreAudit → this surface`. |
+| normalized-input | `npm run demo -- --input FILE.json` | versioned schema-v2 bundle of canonical `agentic_task` records — see [docs/NORMALIZED_INPUT.md](docs/NORMALIZED_INPUT.md); produce envelopes with `buildNormalizedBundle()` (the GitHub adapter ships its own producer of the same contract: `@beetlejuice/github buildNormalizedBundle`) |
+| canonical-core | `npm run demo -- --core-audit FILE.json` | versioned `packages/core` `TenantLedger.audit()` export (`ledger.exportCoreAudit()`) — economics are computed by core and consumed verbatim |
+
+All three modes refuse raw provider payloads with exit code 2 — adapters must
+normalize before this boundary. Reports carry their mode label so synthetic
+demo output can never be mistaken for a real repository audit.
+
+### Zero-evidence headlines
+
+When an audit has **$0 representable spend AND at least one unavailable cost
+component** (e.g. a real repository audited without any billing evidence),
+the headline cells for total measured cost, representable spend and
+cost per successful outcome render as **“no measurable cost evidence supplied”**
+instead of `$0.00` — unknown is not zero. A genuinely measured $0 audit (no
+unavailable components) keeps its numeric `$0.00`. The report JSON always
+keeps exact numbers and exposes the condition as
+`headline.no_measurable_cost_evidence_supplied`; the data-quality section is
+unchanged and remains the numeric source of truth.
+
+Committed e2e coverage for the real modes lives in the repo-root
+`test/integration/` directory (`--github` mode over an in-memory GitHub
+transport; adapter bundle → `--input`; tenant ledger → privacy gate).
+
+## Library use (dashboard/server ready)
+
+```js
+import {
+  buildAuditReport,
+  buildReportFromCoreAudit,
+  renderMarkdownReport,
+} from "@beetlejuice/product-cli";
+```
+
+One report model feeds the CLI today and any future product surface; nothing
+here recomputes canonical-core economics or parses provider payloads.
+
+## Tests
+
+```bash
+npm test                # from repo root: runs every workspace suite
+node --test apps/cli/test   # this package only
+```
+
+`test/cross-package-seam.test.js` executes the full
+github → core → product journey when sibling packages are mounted
+(integration trees) and skips with an explicit reason on lane-only checkouts.

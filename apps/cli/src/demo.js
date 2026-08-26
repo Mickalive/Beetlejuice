@@ -1,0 +1,245 @@
+// WC-005 product surface entrypoint.
+//
+//   npm run demo                              → complete synthetic audit (no credentials)
+//   npm run demo -- --input FILE              → real read-only mode over adapter-normalized records
+//   npm run demo -- --core-audit FILE         → canonical-core mode over a TenantLedger.audit() export
+//   npm run demo -- --github OWNER/REPO       → real read-only audit of that repository
+//                                             (requires BEETLEJUICE_GITHUB_TOKEN; agentic
+//                                             classification via BEETLEJUICE_BOT_ACTORS /
+//                                             BEETLEJUICE_BRANCH_PREFIXES with a documented
+//                                             conservative default — see README)
+//   npm run demo -- --out DIR                 → also write audit-report.md / audit-report.json
+//
+// The surface never parses raw provider payloads: input must be either the
+// versioned normalized bundle emitted by an adapter (see
+// docs/NORMALIZED_INPUT.md) or a versioned packages/core audit export — one
+// canonical model does the economics. The --github mode wires the adapter,
+// the tenant ledger and this surface together internally and is labeled
+// `real-github-read-only` in every report it produces.
+
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
+import { buildAuditReport, buildReportFromCoreAudit } from "./audit.js";
+import { renderMarkdownReport, renderJsonReport } from "./report/markdown.js";
+import { loadSyntheticFixture } from "./synthetic.js";
+import {
+  BOT_ACTORS_ENV,
+  BRANCH_PREFIXES_ENV,
+  DEFAULT_AGENTIC_BRANCH_PREFIXES,
+  GITHUB_TOKEN_ENV,
+  parseOwnerRepo,
+  runGithubReadOnly,
+} from "./github_mode.js";
+
+function parseArgs(argv) {
+  const args = { input: null, coreAudit: null, github: null, out: null, format: "md" };
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+    if (arg === "--input") {
+      args.input = argv[++i] ?? null;
+    } else if (arg === "--core-audit") {
+      args.coreAudit = argv[++i] ?? null;
+    } else if (arg === "--github") {
+      args.github = argv[++i] ?? null;
+    } else if (arg === "--out") {
+      args.out = argv[++i] ?? null;
+    } else if (arg === "--format") {
+      args.format = argv[++i] ?? "md";
+    } else if (arg === "--help" || arg === "-h") {
+      args.help = true;
+    } else {
+      throw new Error(`unknown argument "${arg}"`);
+    }
+  }
+  if (!["md", "json", "both"].includes(args.format)) {
+    throw new Error(`--format must be md|json|both (got "${args.format}")`);
+  }
+  if (args.input && args.coreAudit) {
+    throw new Error("--input and --core-audit are mutually exclusive ingestion seams");
+  }
+  if (args.github && (args.input || args.coreAudit)) {
+    throw new Error("--github performs its own read-only collection and is mutually exclusive with --input/--core-audit");
+  }
+  return args;
+}
+
+export function printHelp() {
+  return `Beetlejuice audit CLI (read-only)
+
+Usage:
+  node apps/cli/src/demo.js [options]
+
+Options:
+  --input <file>       Path to a versioned NORMALIZED bundle of agentic_task records
+                       (adapter output; schema v2). Omit to run the bundled synthetic demo.
+  --core-audit <file>  Path to a versioned packages/core TenantLedger.audit() export
+                       (canonical-core seam: one canonical model does the economics).
+  --github OWNER/REPO  Real read-only audit of that GitHub repository via its history.
+                        Requires ${GITHUB_TOKEN_ENV} to be set (fine-grained PAT or App token,
+                        read-only: Actions/Contents/Pull requests read). No writes are ever performed.
+                        PRs count as agentic only when matched by a classification policy:
+                          ${BOT_ACTORS_ENV}        comma-separated bot logins (measured-agentic)
+                          ${BRANCH_PREFIXES_ENV}  comma-separated branch prefixes (inferred-agentic);
+                                                  "-" disables prefix matching
+                        Unset variables fall back to a documented conservative default
+                        (well-known coding-agent bot logins + tool-owned branch prefixes).
+                        The effective policy is disclosed in every report.
+  --out <dir>          Write audit-report.md and/or audit-report.json into <dir>.
+  --format <fmt>       md | json | both (stdout format; files honor it too)
+  -h, --help           Show this help.
+
+Modes:
+  default                synthetic-demo — complete audit from the bundled fixture,
+                         zero GitHub credentials required. Reports are labeled
+                         "synthetic demo" and are NOT a real repository audit.
+  --input <file>         normalized-input — real data over adapter-normalized records.
+                         Raw provider payloads are rejected by design.
+  --core-audit <file>    canonical-core — renders packages/core audit output verbatim.
+  --github OWNER/REPO    real-github-read-only — collects PR/Actions/check-run history
+                         (GET only), reconstructs agentic-task economics in packages/core
+                         and renders the report. Upstream/network failures exit non-zero;
+                         nothing is fabricated.`;
+}
+
+function readJsonFile(filePath) {
+  let raw;
+  try {
+    raw = readFileSync(filePath, "utf8");
+  } catch (error) {
+    return { error: `cannot read input file "${filePath}": ${error.message}` };
+  }
+  try {
+    return { value: JSON.parse(raw) };
+  } catch (error) {
+    return { error: `input is not valid JSON: ${error.message}` };
+  }
+}
+
+/**
+ * Programmatic entrypoint. Returns a process exit code.
+ *
+ * @param {string[]} argv
+ * @param {object} [deps] test-only injection surface; the committed script path
+ *   passes nothing and always uses the real network transport.
+ * @param {Function} [deps.fetchImpl] injected GitHub transport for --github mode
+ */
+export async function runCli(argv, deps = {}) {
+  let args;
+  try {
+    args = parseArgs(argv);
+  } catch (error) {
+    process.stderr.write(`error: ${error.message}\n\n${printHelp()}\n`);
+    return 2;
+  }
+  if (args.help) {
+    process.stdout.write(`${printHelp()}\n`);
+    return 0;
+  }
+
+  let report;
+  if (args.github) {
+    let spec;
+    try {
+      spec = parseOwnerRepo(args.github);
+    } catch (error) {
+      process.stderr.write(`error: ${error.message}\n`);
+      return 2;
+    }
+    try {
+      const { report: ghReport } = await runGithubReadOnly({
+        owner: spec.owner,
+        repo: spec.repo,
+        token: process.env[GITHUB_TOKEN_ENV] ?? "",
+        ...(typeof deps.fetchImpl === "function" ? { fetchImpl: deps.fetchImpl } : {}),
+      });
+      report = ghReport;
+    } catch (error) {
+      if (
+        error.code === "GITHUB_TOKEN_MISSING" ||
+        error.code === "SIBLING_PACKAGES_MISSING" ||
+        // Operator classification-policy misconfiguration is a setup problem,
+        // not an upstream failure: exit 2 with guidance, never a fake audit.
+        error.code === "GITHUB_POLICY_ENV_INVALID" ||
+        error.code === "GITHUB_POLICY_MATCHED_NOTHING"
+      ) {
+        process.stderr.write(
+          `error${error.code ? ` [${error.code}]` : ""}: ${error.message}\n`
+        );
+        if (error.code === "GITHUB_POLICY_ENV_INVALID") {
+          process.stderr.write(
+            `Fix the ${BOT_ACTORS_ENV}/${BRANCH_PREFIXES_ENV} values (comma-separated; "-" disables a dimension)` +
+              ` or unset them to use the documented conservative default` +
+              ` (${DEFAULT_AGENTIC_BRANCH_PREFIXES.length} tool-owned branch prefixes + adapter-suggested bot actors).\n`
+          );
+        }
+        return 2;
+      }
+      process.stderr.write(
+        `GITHUB AUDIT FAILED (${error.name ?? "Error"}${error.code ? ` ${error.code}` : ""}): ${error.message}\n`
+      );
+      return 3;
+    }
+  } else if (args.input || args.coreAudit) {
+    const filePath = args.input ?? args.coreAudit;
+    const parsed = readJsonFile(filePath);
+    if (parsed.error) {
+      process.stderr.write(`error: ${parsed.error}\n`);
+      return 2;
+    }
+    try {
+      report = args.input
+        ? buildAuditReport(parsed.value, { mode: "normalized-input" })
+        : buildReportFromCoreAudit(parsed.value, { mode: "canonical-core" });
+    } catch (error) {
+      const errors = error.validation_errors ?? [];
+      process.stderr.write(
+        `INVALID ${args.input ? "NORMALIZED INPUT" : "CORE AUDIT EXPORT"} (${error.message})\n`
+      );
+      for (const e of errors.slice(0, 20)) {
+        process.stderr.write(`  - ${e.path}: ${e.message}\n`);
+      }
+      if (errors.length > 20) process.stderr.write(`  … and ${errors.length - 20} more\n`);
+      process.stderr.write(
+        `\nThe product surface consumes ONLY adapter-normalized canonical records or canonical-core exports.\nSee apps/cli/docs/NORMALIZED_INPUT.md for the contracts.\n`
+      );
+      return 2;
+    }
+  } else {
+    report = buildAuditReport(loadSyntheticFixture(), { mode: "synthetic-demo" });
+  }
+
+  const json = renderJsonReport(report);
+  const markdown = args.format === "json" ? undefined : renderMarkdownReport(report);
+
+  if (args.format === "json") {
+    process.stdout.write(json);
+  } else {
+    process.stdout.write(markdown);
+  }
+
+  if (args.out) {
+    mkdirSync(args.out, { recursive: true });
+    const written = [];
+    if (markdown !== undefined) {
+      const mdPath = path.join(args.out, "audit-report.md");
+      writeFileSync(mdPath, markdown);
+      written.push(mdPath);
+    }
+    const jsonPath = path.join(args.out, "audit-report.json");
+    writeFileSync(jsonPath, json);
+    written.push(jsonPath);
+    process.stdout.write(`\n---\nreports written:\n${written.map((p) => `  ${p}`).join("\n")}\n`);
+  }
+
+  return 0;
+}
+
+const invokedAsScript =
+  process.argv[1] !== undefined &&
+  import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;
+if (invokedAsScript) {
+  runCli(process.argv.slice(2)).then((code) => {
+    process.exitCode = code;
+  });
+}

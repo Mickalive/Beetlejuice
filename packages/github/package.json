@@ -1,0 +1,17 @@
+{
+  "name": "@beetlejuice/github",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "description": "GitHub read-only ingestion adapter (WC-002): reconstructs vendor-neutral AGENTIC_TASK evidence from Actions/PR/check history for Beetlejuice.",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
