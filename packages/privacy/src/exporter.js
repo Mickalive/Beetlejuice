@@ -10,7 +10,10 @@
  *   2. schema-validation    candidate must be a valid glr/1 record
  *   3. content-defense      scan every string value for secrets, hashes,
  *                           URLs, paths, emails, PR refs, raw content
- *   4. cohort-suppression   drop combinations rarer than the threshold
+ *   4. cohort-suppression   drop combinations rarer than the threshold;
+ *                           admit at most `rows_per_combination_limit` rows
+ *                           per distinct combination (single-source
+ *                           inflation bound; excess -> over_combination_cap)
  *   5. purpose-binding      export only under ONE explicit consent purpose
  *                           with per-purpose policy floors
  *   5b. aggregate-statistics when publishing cohort counts, optional
@@ -22,7 +25,10 @@
  * Request-shape mistakes (missing purpose, unknown purpose, missing license
  * acknowledgement, malformed container) throw `PrivacyExportError`.
  * Per-record problems are returned in `rejected[]` — the pipeline never
- * aborts on one bad row and never echoes offending values back.
+ * aborts on one bad row and never echoes offending values OR caller-supplied
+ * key names back: rejection diagnostics carry only package-owned
+ * closed-vocabulary field names; foreign keys are reported as
+ * `field_redacted: true`.
  */
 
 import { scanGlobalLearningRecord } from "./content.js";
@@ -41,7 +47,7 @@ import {
   aggregateCohorts,
 } from "./suppression.js";
 import { summarizePrivacyRisk } from "./risk.js";
-import { normalizeTenantRecord } from "./transform.js";
+import { normalizeTenantRecord, redactRejectionField } from "./transform.js";
 import { pipelineTrace } from "./versions.js";
 
 /** Error thrown for invalid export REQUESTS (as opposed to bad records). */
@@ -75,6 +81,25 @@ export function effectiveCohortThreshold(purpose, requested) {
     );
   }
   return Math.max(floor, requested);
+}
+
+/**
+ * Effective per-combination admission cap for one export request: callers
+ * may TIGHTEN it (fewer duplicate rows per distinct combination) but never
+ * exceed the purpose's policy ceiling — the same inverse relationship as
+ * epsilon. Without a cap, a single source could launder any near-unique
+ * combination past the cohort floor by submitting k identical rows.
+ */
+export function effectiveMaxRowsPerCombination(purpose, requested) {
+  const ceiling = PURPOSE_POLICIES[purpose].maximumRowsPerCombination;
+  if (requested === undefined) return ceiling;
+  if (!Number.isInteger(requested) || requested < 1) {
+    throw new PrivacyExportError(
+      "INVALID_ROWS_PER_COMBINATION",
+      "maxRowsPerCombination must be a positive integer.",
+    );
+  }
+  return Math.min(ceiling, requested);
 }
 
 /**
@@ -132,6 +157,7 @@ export function effectiveEpsilon(purpose, requested) {
  *   purpose: string,
  *   licenseAcknowledged?: boolean,
  *   cohortThreshold?: number,
+ *   maxRowsPerCombination?: number,
  *   aggregateOnly?: boolean,
  *   differentialPrivacy?: boolean,
  *   epsilon?: number,
@@ -143,6 +169,7 @@ export function effectiveEpsilon(purpose, requested) {
  *   purpose: string,
  *   license_acknowledged: boolean,
  *   cohort_threshold: number,
+ *   rows_per_combination_limit?: number,
  *   transformations: {id: string, version: string}[],
  *   counts: {provided: number, accepted: number, suppressed: number, rejected: number},
  *   privacy_risk: ReturnType<typeof summarizePrivacyRisk>,
@@ -150,8 +177,8 @@ export function effectiveEpsilon(purpose, requested) {
  *   cohorts?: {combination: Record<string, string|boolean>, size: number}[],
  *   aggregate_mode?: "exact"|"differential_private",
  *   differential_privacy?: {mechanism: "laplace", epsilon: number, sensitivity: number},
- *   suppressed: {reason_code: string, cohort_size: number, threshold: number, combination: Record<string, string|boolean>}[],
- *   rejected: {index: number, reason_code: string, field?: string}[],
+ *   suppressed: {reason_code: string, cohort_size: number, threshold: number, rows_per_combination_limit?: number, combination: Record<string, string|boolean>}[],
+ *   rejected: {index: number, reason_code: string, field?: string, field_redacted?: true}[],
  * }}
  */
 export function exportGlobalLearningRecords(request = {}) {
@@ -160,6 +187,7 @@ export function exportGlobalLearningRecords(request = {}) {
     purpose,
     licenseAcknowledged = false,
     cohortThreshold,
+    maxRowsPerCombination,
     aggregateOnly = false,
     differentialPrivacy = false,
     epsilon,
@@ -225,6 +253,13 @@ export function exportGlobalLearningRecords(request = {}) {
     );
   }
   const k = effectiveCohortThreshold(purpose, cohortThreshold);
+  // Row-level admission cap (single-source inflation bound). Published
+  // aggregates are intentionally NOT capped: their counts are protected by
+  // the cohort floor plus optional differential privacy, and clamping them
+  // would corrupt benchmark statistics.
+  const rowCap = aggregateOnly
+    ? undefined
+    : effectiveMaxRowsPerCombination(purpose, maxRowsPerCombination);
 
   // --- input-normalization + schema-validation + content-defense ---
   /** @type {{record: Record<string, string|boolean>, provenance: Record<string, string>}[]} */
@@ -269,9 +304,23 @@ export function exportGlobalLearningRecords(request = {}) {
           admitted: [],
           suppressed: suppressRareCombinations(candidateRecords, { threshold: k }).suppressed,
         }
-      : suppressRareCombinations(candidateRecords, { threshold: k });
+      : suppressRareCombinations(candidateRecords, {
+          threshold: k,
+          maxPerCombination: rowCap,
+        });
 
-  rejected.sort((a, b) => (a.index < b.index ? -1 : a.index > b.index ? 1 : 0));
+  // Defense in depth: no caller-controlled string may reach the envelope,
+  // not even as a rejection diagnostic. `normalizeTenantRecord` already
+  // redacts foreign key names; this sweep guarantees the invariant holds for
+  // every entry regardless of which stage produced it (e.g. content-defense
+  // or schema-validation) and cannot regress silently. Key insertion order
+  // is fixed so serialization stays byte-stable.
+  const sanitizedRejected = rejected.map(({ index, reason_code, ...rest }) => ({
+    index,
+    reason_code: typeof reason_code === "string" ? reason_code : "invalid_rejection_shape",
+    ...redactRejectionField(rest.field),
+  }));
+  sanitizedRejected.sort((a, b) => (a.index < b.index ? -1 : a.index > b.index ? 1 : 0));
 
   // --- risk-summary (deterministic explanation of what the gate did) ---
   const privacyRisk = summarizePrivacyRisk({
@@ -279,7 +328,7 @@ export function exportGlobalLearningRecords(request = {}) {
     candidates,
     admittedCount: suppression.admitted.length,
     suppressedCount: suppression.suppressed.length,
-    rejected,
+    rejected: sanitizedRejected,
   });
 
   const envelope = {
@@ -293,11 +342,11 @@ export function exportGlobalLearningRecords(request = {}) {
       provided: records.length,
       accepted: suppression.admitted.length,
       suppressed: suppression.suppressed.length,
-      rejected: rejected.length,
+      rejected: sanitizedRejected.length,
     },
     privacy_risk: privacyRisk,
     suppressed: suppression.suppressed,
-    rejected,
+    rejected: sanitizedRejected,
   };
 
   if (aggregateOnly) {
@@ -321,6 +370,7 @@ export function exportGlobalLearningRecords(request = {}) {
       envelope.cohorts = exact;
     }
   } else {
+    envelope.rows_per_combination_limit = rowCap;
     envelope.accepted = suppression.admitted;
   }
 

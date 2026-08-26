@@ -16,8 +16,13 @@ survives every stage below, and every export explains what the gate did.
 - **Fail-closed.** Near-miss key names, prototype-chain keys (`__proto__`,
   `constructor`), exact timestamps, raw magnitudes, free text and secret-like
   content are all rejected with machine-readable reason codes.
-- **No value echo.** Rejection reasons carry codes and field names only;
-  offending *values* (especially secrets) never reappear in any envelope.
+- **No value echo — of values *or* caller key names.** Rejection reasons carry
+  reason codes plus only package-owned closed-vocabulary field names
+  (`task_class`, `cost_usd`, …). A forbidden or unknown KEY NAME is itself
+  caller-controlled free text that could carry org/repo/developer markers,
+  so foreign keys are reported as `field_redacted: true` and never travel
+  into the envelope (input-normalization 1.2.0). Offending *values* never
+  reappear in any channel either.
 - **Deterministic + versioned.** Identical input yields byte-identical output.
   Every export embeds the ordered pipeline trace with per-step versions.
 
@@ -27,15 +32,19 @@ survives every stage below, and every export explains what the gate did.
 tenant observation
   1. input-normalization   strict input allowlist; bucket raw magnitudes;
                            classify raw agent/model names; reject forbidden,
-                           unknown and timestamp keys; record generalization
-                           provenance per field
+                           unknown and timestamp keys (foreign key names are
+                           redacted from diagnostics, never echoed); record
+                           generalization provenance per field
   2. schema-validation     candidate must be a complete valid glr/1 record
   3. content-defense       scan every string for credential shapes, hashes,
                            UUIDs, URLs, paths, emails, IPs, PR refs,
                            oversized/multiline/high-entropy blobs
   4. cohort-suppression    group by full abstract combination (content only,
-                            no join key); suppress groups smaller than the
-                            effective cohort threshold
+                             no join key); suppress groups smaller than the
+                             effective cohort threshold AND admit at most
+                             `rows_per_combination_limit` rows per distinct
+                             combination per export (single-source inflation
+                             bound; excess -> over_combination_cap)
   5. purpose-binding       export under exactly ONE explicit consent purpose;
                             per-purpose minimum-cohort floors cannot be lowered
   5b. aggregate-statistics when publishing cohort counts, optional
@@ -149,15 +158,37 @@ Properties and policy:
 
 ## Consent purposes (separate rights surfaces)
 
-| Purpose | Min cohort | Max epsilon (DP aggregates) | License acknowledgement |
-| --- | --- | --- | --- |
-| `PRODUCT_TELEMETRY` | 5 | 5 | not required |
-| `GLOBAL_BENCHMARK_CONTRIBUTION` | 5 | 2 | not required |
-| `EXTERNAL_RESEARCH_DATA_LICENSING` | 25 | 1 | **required** |
+| Purpose | Min cohort | Max epsilon (DP aggregates) | Max rows / combination | License acknowledgement |
+| --- | --- | --- | --- | --- |
+| `PRODUCT_TELEMETRY` | 5 | 5 | 100 | not required |
+| `GLOBAL_BENCHMARK_CONTRIBUTION` | 5 | 2 | 50 | not required |
+| `EXTERNAL_RESEARCH_DATA_LICENSING` | 25 | 1 | 25 | **required** |
 
 Purpose is never inferred; it must be passed explicitly on every export.
 Callers may raise a cohort threshold but never lower it below the floor.
 Absolute minimum cohort for any purpose is 2.
+
+### Single-source inflation bound (`rows_per_combination_limit`)
+
+Cohort floors alone are launderable: one source could push any near-unique
+combination past the rarity defense by submitting k duplicate rows in a
+single batch. Row-level exports therefore admit at most
+`rows_per_combination_limit` rows per distinct abstract combination per
+request (telemetry 100, benchmark 50, research 25). Callers may tighten the
+cap via `maxRowsPerCombination` but never exceed the purpose ceiling — the
+same inverse shape as epsilon. Excess duplicates are SUPPRESSED with reason
+`over_combination_cap`, so `provided = accepted + suppressed + rejected`
+still holds exactly.
+
+Honest scope:
+
+- The cap bounds what ONE request can contribute to one combination;
+  cross-batch accumulation remains a global-layer operational concern.
+- Published aggregate cohorts are intentionally NOT capped: their counts are
+  protected by the cohort floor plus optional differential privacy, and
+  clamping them would corrupt benchmark statistics.
+- All members of a combination group are byte-identical by construction, so
+  capping never depends on input order and exports stay byte-stable.
 
 ## Usage
 
@@ -206,12 +237,16 @@ node --test        # from this directory, or `npm test` at the repo root
 ```
 
 Coverage includes: schema closed-worldness, forbidden-key and timestamp
-smuggling (including `__proto__`/`constructor` chain keys), raw magnitude
-bucketing boundaries, content-defense detection of every fake sensitive
-payload (assembled at runtime from harmless fragments — no credential-shaped
-literal ever appears in this repository), rare-combination suppression and
-cohort floors across purposes, differential-privacy publication (seeded
-determinism, epsilon ceilings, per-cohort anti-differencing stability,
+smuggling (including `__proto__`/`constructor` chain keys), envelope-wide
+no-echo of caller-controlled key names (org/repo/developer markers planted in
+foreign keys never reach `rejected[]`; closed-vocabulary diagnostics are
+preserved), raw magnitude bucketing boundaries, content-defense detection of
+every fake sensitive payload (assembled at runtime from harmless fragments —
+no credential-shaped literal ever appears in this repository), rare-combination
+suppression and cohort floors across purposes, single-source inflation caps
+(`over_combination_cap` semantics, per-purpose ceilings, tightening/clamping,
+order-independence, aggregate-mode exemption), differential-privacy publication
+(seeded determinism, epsilon ceilings, per-cohort anti-differencing stability,
 no-seed-disclosure, exact-count non-leakage), tenant isolation/
 indistinguishability, join-key absence, reproducibility/versioning,
 benchmark-surface economics, the privacy-risk explanation block, and an

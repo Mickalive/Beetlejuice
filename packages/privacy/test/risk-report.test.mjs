@@ -139,7 +139,7 @@ test("rejection reasons are aggregated with counts in canonical order", () => {
   assert.equal(provided_records, candidate_records + rejected_records);
 });
 
-test("the privacy-risk block never echoes offending keys' values", () => {
+test("the privacy-risk block never echoes offending keys' values or foreign key names", () => {
   const MARKER = "super-distinctive-leak-probe";
   const result = exportGlobalLearningRecords({
     purpose: PURPOSE,
@@ -151,8 +151,17 @@ test("the privacy-risk block never echoes offending keys' values", () => {
   });
   const serialized = JSON.stringify(result);
   assert.ok(!serialized.includes(MARKER), "offending value leaked into envelope");
-  // Field names may be echoed (schema metadata, not content); values never.
-  assert.ok(result.rejected.some((r) => typeof r.field === "string"));
+  // Caller-controlled KEY names are redacted too (input-normalization 1.2.0):
+  // only package-owned closed-vocabulary field names may be echoed.
+  assert.ok(!serialized.includes("customer_id"), "foreign key name leaked");
+  const redacted = result.rejected.find((r) => r.field_redacted === true);
+  assert.ok(redacted, "foreign-key rejection must carry field_redacted");
+  // Closed-vocabulary diagnostics survive: the content-defense rejection
+  // still names the schema-owned field it scanned.
+  assert.equal(
+    result.rejected.some((r) => r.field === "agent_name"),
+    true,
+  );
 });
 
 test("privacy_risk is byte-stable across runs and independent of input order", () => {
