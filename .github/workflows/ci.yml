@@ -25,6 +25,19 @@ jobs:
           node-version: 22
       - name: Install workspace
         run: npm install --ignore-scripts
+      - name: Require a real test suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          TEST_COUNT=$(find . \
+            -path './node_modules' -prune -o \
+            -type f \( -path '*/test/*' -o -path '*/tests/*' -o -name '*.test.*' -o -name '*.spec.*' \) \
+            -print | wc -l)
+          if [[ "$TEST_COUNT" -lt 1 ]]; then
+            echo "::error::No test files found. A zero-test green build is forbidden."
+            exit 1
+          fi
+          echo "Detected $TEST_COUNT test file(s)."
       - name: Unit and integration tests
         run: npm test
       - name: Synthetic product audit
