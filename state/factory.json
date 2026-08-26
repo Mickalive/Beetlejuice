@@ -2,7 +2,7 @@
   "schema_version": "1",
   "status": "BUILDING",
   "continue": true,
-  "next_action": "CLOSE_CI_AND_START_P1: lab/integration now mounts the full integrated product (core+github+privacy+product+integration seams). 11/12 P0 criteria flipped true on this cycle's executed evidence (see p0_check_rationale + reports/integration-runtime-status.txt); the only open item is integration_ci_green — all four CI steps already executed green on the exact pushed commit (install exit 0, first-party guard 57>=20, npm test 363/363, npm run demo exit 0), so verify the remote Actions run on lab/integration is green and flip that check (no code change expected). Immediately after: begin P1 per docs/PRODUCT_OBJECTIVE.md — GitHub App prototype surface (least-privilege permissions doc is done; add receiving webhook endpoint with signature verification wired to packages/github/src/webhook/{verify,normalize}.js which are already tested libraries), incremental event ingestion path, and historical bootstrap timing vs the under-five-minute target. Optional hardening: give --github an operator cost-source flag so measured CI money flows without code changes. Do not regress privacy boundaries or X1/R1 certain-waste epistemics while doing so.",
+  "next_action": "CLOSE_CI_AND_START_P1: lab/integration @ 12eb539 now mounts the full integrated product (core+github+privacy+product lanes + committed cross-seam tests). CI triggers on push to lab/integration; all four CI steps already executed green on this exact tree (install exit 0, npm test 363/363, npm run demo exit 0) — confirm the remote Actions run is green and flip integration_ci_green (no code change expected). Land reports/ci-guard-proposal.md when a credential WITH workflows permission is available (push of .github/workflows/ci.yml was rejected server-side for this App; old guard still passes green on this tree, so nothing is red meanwhile). Then begin P1 per docs/PRODUCT_OBJECTIVE.md: webhook receiving endpoint wiring the already-tested packages/github/src/webhook/{verify,normalize}.js libraries, incremental event ingestion path, historical-bootstrap timing vs the under-five-minute target. Optional: operator cost-source flag on --github so measured CI money flows in real mode. Never regress privacy boundaries or X1/R1 certain-waste epistemics.",
   "blocking_reason": null,
   "p0_checks": {
     "canonical_agentic_task": true,
@@ -18,7 +18,7 @@
     "quickstart_docs": true,
     "integration_ci_green": false
   },
-  "last_verified_commit": "beb0648f242626252c96aeed5143ac5e016a1729",
+  "last_verified_commit": "12eb539d011b887a7bc4d3751b1059bc5c71b80e",
   "cycle": 32936499446,
   "evidence": {
     "closed_cycle": 32936499446,
@@ -39,13 +39,14 @@
     ],
     "executed_checks": [
       { "command": "npm install --ignore-scripts", "exit_code": 0 },
-      { "command": "npm test", "result": "# tests 363 / # pass 363 / # fail 0 / # skipped 0 (one suite across core 86, github 114+, privacy 90+, product 65+, integration 11)" },
+      { "command": "npm test", "result": "# tests 363 / # pass 363 / # fail 0 / # skipped 0 (one suite across core, github, privacy, product + 11 integration seam tests)" },
       { "command": "npm run demo", "result": "exit 0 — $28.57 measured / 2 accepted / $15.09 per accepted outcome / $8.99 certainly avoidable (31.47%), findings F-001..F-004 each with evidence refs/units" },
       { "command": "npm run demo x2 && diff -r", "result": "byte-identical outputs (deterministic)" },
       { "command": "node scripts/live-github-audit-probe.mjs (LIVE api.github.com, public repo eubby06/kids-store, no credentials)", "result": "18 strictly-GET requests; 6 PRs -> 45 canonical events; 4 accepted / 2 unresolved; F-001..F-005 certain WASTE_EXEC_SUPERSEDED_V1 findings with unquantified unknown-cost units ($0 never invented); costs honestly unavailable; report labeled real-github-read-only" },
       { "command": "node apps/cli/src/demo.js --github acme/widget with empty token", "result": "exit 2 + setup guidance, no fabricated audit" },
       { "command": "node apps/cli/src/demo.js --github octocat/Hello-World with fake token", "result": "real TLS call to api.github.com, honest upstream failure, exit 3" },
-      { "command": "CI guard find (fixed) executed locally", "result": "57 first-party test files >= floor 20 (previously 147/149 counted files were vendored .opencode zod tests)" },
+      { "command": "CI guard find (fixed) executed locally", "result": "57 first-party test files >= floor 20 (previously 147/149 counted files were vendored .opencode zod tests). NOTE: ci.yml edit was rejected at push (factory App lacks workflows permission); guard fix preserved verbatim in reports/ci-guard-proposal.md and ci.yml restored to origin version, which still passes green on this tree." },
+      { "command": "git push origin lab/integration", "result": "e71a234..12eb539 pushed successfully (after splitting out the workflow-file change)" },
       { "command": "github fixture bundle (costed source) -> runCli --input", "result": "exit 0; $0.232 known spend flows verbatim into measured totals" }
     ],
     "p0_check_rationale": "Every true check is backed by an executed command on the mounted integration branch recorded above and in reports/integration-runtime-status.txt. canonical_agentic_task/github_fixture_ingestion/cost_accounting/outcome_attribution: lane suites plus committed cross-package seam e2e plus LIVE api.github.com ingestion producing balanced accounting and correct attribution (4 accepted / 2 unresolved on a real repository). certain_waste_detector: core lane's G5 repair closes audit X1 with negative regressions (exact E14 replica now abstains), and the live-repo audit produced five certain superseded-execution findings whose unknown-cost units stay explicitly unquantified. synthetic_demo/economic_product_surface: deterministic economics-first report with savings tracing to finding IDs. real_read_only_github_mode: A11 closed as committed behavior (--github OWNER/REPO) proven against live GitHub data including honest failure paths. privacy_safe_global_export: privacy attack batteries plus new integration round-trip over REAL ledger output (identifiers stripped, cohort suppression active, byte-identical records across tenants). critical_tests: 363/363 zero-skipped. quickstart_docs: README distinguishes synthetic demo from --github/--input/--core-audit real modes with exact commands. integration_ci_green remains false ONLY because the remote Actions run on the pushed branch has not been observed (gh is unauthenticated in this environment); the four CI steps were executed locally on the exact pushed commit with green results, so this is a mechanical verification, not engineering risk.",
