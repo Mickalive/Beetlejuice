@@ -1,0 +1,78 @@
+name: BEETLEJUICE Factory Supervisor
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows:
+      - "BEETLEJUICE Product Factory"
+    types: [completed]
+  schedule:
+    - cron: "7,37 * * * *"
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/factory-supervisor.yml'
+      - '.github/workflows/factory-loop.yml'
+      - 'state/factory.json'
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: beetlejuice-factory-supervisor
+  cancel-in-progress: true
+
+jobs:
+  continuity:
+    name: Ensure product factory continuity
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Re-derive continuation from durable state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          RUNS=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow factory-loop.yml --limit 50 \
+            --json databaseId,status,conclusion,createdAt 2>/dev/null || echo '[]')
+
+          ACTIVE=$(jq '[.[] | select(.status != "completed")] | length' <<<"$RUNS")
+          if [[ "$ACTIVE" -gt 0 ]]; then
+            echo "A Beetlejuice factory cycle is already active; refusing duplicate work."
+            exit 0
+          fi
+
+          if gh api "repos/${GITHUB_REPOSITORY}/branches/lab%2Fintegration" >/dev/null 2>&1; then
+            STATE=$(gh api -H 'Accept: application/vnd.github.raw+json' \
+              "repos/${GITHUB_REPOSITORY}/contents/state/factory.json?ref=lab/integration" 2>/dev/null || echo '{}')
+          else
+            STATE=$(gh api -H 'Accept: application/vnd.github.raw+json' \
+              "repos/${GITHUB_REPOSITORY}/contents/state/factory.json?ref=main" 2>/dev/null || echo '{}')
+          fi
+
+          CONTINUE=$(jq -r '.continue // true' <<<"$STATE" 2>/dev/null || echo true)
+          STATUS=$(jq -r '.status // "BUILDING"' <<<"$STATE" 2>/dev/null || echo BUILDING)
+          NEXT_ACTION=$(jq -r '.next_action // "IMPLEMENT_P0"' <<<"$STATE" 2>/dev/null || echo IMPLEMENT_P0)
+
+          case "$STATUS" in
+            COMPLETE|BLOCKED_EXTERNAL)
+              echo "Factory state is $STATUS; no autonomous relaunch. next_action=$NEXT_ACTION"
+              exit 0
+              ;;
+            P0_READY)
+              if [[ "$CONTINUE" != true ]]; then
+                echo "P0 is ready and state does not request more autonomous work."
+                exit 0
+              fi
+              ;;
+          esac
+
+          if [[ "$CONTINUE" == true ]]; then
+            echo "Relaunching Beetlejuice factory from durable state: status=$STATUS next_action=$NEXT_ACTION"
+            gh workflow run factory-loop.yml --repo "$GITHUB_REPOSITORY" --ref main
+          else
+            echo "Factory state explicitly sets continue=false; no relaunch."
+          fi
