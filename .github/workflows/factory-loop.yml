@@ -30,26 +30,26 @@ jobs:
           - lane: core
             agent: core_builder
             owned_path: packages/core
-            mission: "Advance the P0.5 architecture-first model: represent automation topology/policies, task context, outcomes, structural waste and later billing labels without making cost the primary explanatory signal."
+            mission: "Advance the highest-priority unfinished core/domain-model gate from durable state. P0.5 architecture learning comes before P1; once P0_5_READY is evidenced, advance the next P1/roadmap core capability instead of repeating completed work."
           - lane: github
             agent: github_builder
             owned_path: packages/github
-            mission: "Advance P0.5 real-GitHub evidence: reconstruct identifiable agent/task/model provenance and automation architecture from real HTTPS history, with correlation confidence, pagination, rate-limit/network resilience and safe abstention."
+            mission: "Advance the highest-priority unfinished GitHub/evidence gate from durable state. P0.5 real-GitHub architecture reconstruction comes before P1; once P0_5_READY is evidenced, advance the next installable GitHub App/roadmap adapter capability."
           - lane: privacy
             agent: privacy_builder
             owned_path: packages/privacy
-            mission: "Advance the P0.5 privacy-safe global architecture-learning export: unlinkable abstract topology/task/outcome/resource fields plus rights-cleared generalized economic labels, with re-identification defenses."
+            mission: "Advance the highest-priority unfinished privacy/data-boundary gate from durable state. P0.5 unlinkable architecture export comes before P1; after it is evidenced, advance the next privacy requirement of the active roadmap phase."
           - lane: product
             agent: product_builder
             owned_path: apps
-            mission: "Advance the P0.5 architecture-first user surface and executed real-world robustness evidence: explain architecture and structural inefficiency without full billing, then attach partial/complete real billing honestly as local calibration."
+            mission: "Advance the highest-priority unfinished product-surface gate from durable state. P0.5 real-world architecture evidence comes before P1; once P0_5_READY is evidenced, advance the next installable product/roadmap capability rather than polishing a completed gate."
 
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - name: Start product lane with binding main control plane
+      - name: Start product lane with binding main policy and durable progress state
         shell: bash
         run: |
           set -euo pipefail
@@ -58,7 +58,7 @@ jobs:
           CONTROL=/tmp/beetlejuice-control-plane
           rm -rf "$CONTROL"
           mkdir -p "$CONTROL"
-          for path in .github/scripts .opencode AGENTS.md docs state/factory.json; do
+          for path in .github/scripts .opencode AGENTS.md docs; do
             if git cat-file -e "origin/main:${path}" 2>/dev/null; then
               git archive --format=tar origin/main "$path" | tar -xf - -C "$CONTROL"
             fi
@@ -88,7 +88,7 @@ jobs:
           bash .github/scripts/run-opencode-with-retry.sh run \
             --model "$BEETLEJUICE_MODEL" \
             --agent "${{ matrix.agent }}" \
-            "${{ matrix.mission }} Work only on the already-checked-out cycle branch from the immutable integration product base. The binding control plane (.opencode, AGENTS.md, docs, state/factory.json and runtime scripts) has been overlaid from current main and outranks stale copies from the product branch. P0 is already green; P0.5 architecture-learning and billing-calibration viability outrank P1 until the real-world gate is executed. Produce durable tested product progress inside your owned path ${{ matrix.owned_path }}. Do NOT git fetch, pull, merge, rebase, cherry-pick, switch, checkout or reset to another ref. Do NOT modify .github/**, docs/**, AGENTS.md or state/**. Inspect state/factory.json only as read-only context; do not declare global product completion. Never put credential-shaped literal fixtures (Slack/GitHub/AWS/API tokens or similar) in source or tests; construct fake sensitive values from harmless fragments at runtime. If the obvious task is already implemented, find the next missing P0.5 acceptance criterion in WC-007 and advance it."
+            "${{ matrix.mission }} Work only on the already-checked-out cycle branch from the immutable integration product base. Binding policy (.opencode, AGENTS.md, docs and runtime scripts) comes from current main; cumulative progress state comes from lab/integration and must never be reset by an older main copy. Read state/factory.json and the product objective to identify the active gate. P0 is already green. P0.5 outranks P1 until P0_5_READY is defensible; once it is, move to P1 and then the next declared roadmap work instead of repeating completed P0.5 tasks. Produce durable tested product progress inside your owned path ${{ matrix.owned_path }}. Do NOT git fetch, pull, merge, rebase, cherry-pick, switch, checkout or reset to another ref. Do NOT modify .github/**, docs/**, AGENTS.md or state/**. Inspect state/factory.json only as read-only context; do not declare global product completion. Never put credential-shaped literal fixtures (Slack/GitHub/AWS/API tokens or similar) in source or tests; construct fake sensitive values from harmless fragments at runtime. Follow the AGENTS.md anti-spin rule: after a zero-delta approach, change strategy rather than repeating it."
 
       - name: Repair credential-shaped fixtures before persistence
         if: always()
@@ -206,7 +206,7 @@ jobs:
           pattern: beetlejuice-lane-*-${{ github.run_id }}
           path: /tmp/beetlejuice_lane_artifacts
 
-      - name: Checkout product candidate with binding main control plane and mount lanes
+      - name: Checkout product candidate with binding main policy and mount lanes
         shell: bash
         run: |
           set -euo pipefail
@@ -215,7 +215,7 @@ jobs:
           CONTROL=/tmp/beetlejuice-control-plane
           rm -rf "$CONTROL"
           mkdir -p "$CONTROL"
-          for path in .github/scripts .opencode AGENTS.md docs state/factory.json; do
+          for path in .github/scripts .opencode AGENTS.md docs; do
             if git cat-file -e "origin/main:${path}" 2>/dev/null; then
               git archive --format=tar origin/main "$path" | tar -xf - -C "$CONTROL"
             fi
@@ -251,13 +251,13 @@ jobs:
         shell: bash
         run: bash .github/scripts/install-opencode-with-retry.sh
 
-      - name: Integrate and repair
+      - name: Integrate, repair, and advance active gate
         shell: bash
         run: |
           bash .github/scripts/run-opencode-with-retry.sh run \
             --model "$BEETLEJUICE_MODEL" \
             --agent integration_director \
-            "Integrate Factory cycle ${GITHUB_RUN_ID} against the binding P0.5 architecture-first state from current main. Lane snapshots are mounted at /tmp/beetlejuice_core, /tmp/beetlejuice_github, /tmp/beetlejuice_privacy and /tmp/beetlejuice_product. Bring in all useful non-conflicting product progress, repair interfaces/root config/tests as needed, and execute the strongest available P0.5 checks. P0 is already green. Prioritize architecture reconstruction/topology, identifiable real-repo evidence, structural-waste precision, privacy-safe architecture export, and later attachment of real billing without schema redesign. Update state/factory.json only from verified evidence; do not mark P0_5_READY from fixtures or prose. Leave one runnable integrated product candidate."
+            "Integrate Factory cycle ${GITHUB_RUN_ID} against binding policy from current main and cumulative progress from lab/integration. Lane snapshots are mounted at /tmp/beetlejuice_core, /tmp/beetlejuice_github, /tmp/beetlejuice_privacy and /tmp/beetlejuice_product. Bring in all useful non-conflicting product progress, repair interfaces/root config/tests as needed, and execute the strongest checks for the active gate in state/factory.json. P0 is green. P0.5 must be proven before P1; after P0_5_READY, integrate P1/next-roadmap work rather than re-running completed P0.5 work. Update state/factory.json only from verified evidence. Never mark real-world gates passed from fixtures or prose. Follow the anti-spin rule and leave one runnable integrated product candidate."
 
       - name: Verify integrated candidate
         if: always()
@@ -277,7 +277,7 @@ jobs:
           fi
           exit 0
 
-      - name: Persist integration branch without control-plane overlay
+      - name: Persist integration branch without policy overlay
         if: always()
         shell: bash
         run: |
@@ -294,7 +294,7 @@ jobs:
           git push origin HEAD:refs/heads/lab/integration
 
   audit:
-    name: ADVERSARIAL P0.5 ARCHITECTURE AUDIT
+    name: ADVERSARIAL ACTIVE-GATE AUDIT
     needs: [integration]
     if: ${{ always() && !cancelled() }}
     runs-on: ubuntu-latest
@@ -304,7 +304,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Mount integration candidate with binding main control plane
+      - name: Mount integration candidate with binding main policy
         shell: bash
         run: |
           set -euo pipefail
@@ -312,7 +312,7 @@ jobs:
           CONTROL=/tmp/beetlejuice-control-plane
           rm -rf "$CONTROL"
           mkdir -p "$CONTROL"
-          for path in .github/scripts .opencode AGENTS.md docs state/factory.json; do
+          for path in .github/scripts .opencode AGENTS.md docs; do
             if git cat-file -e "origin/main:${path}" 2>/dev/null; then
               git archive --format=tar origin/main "$path" | tar -xf - -C "$CONTROL"
             fi
@@ -325,13 +325,13 @@ jobs:
         shell: bash
         run: bash .github/scripts/install-opencode-with-retry.sh
 
-      - name: Audit P0.5 architecture learning and robustness
+      - name: Audit active product gate adversarially
         shell: bash
         run: |
           bash .github/scripts/run-opencode-with-retry.sh run \
             --model "$BEETLEJUICE_MODEL" \
             --agent product_auditor \
-            "Adversarially audit the integrated Beetlejuice candidate from Factory cycle ${GITHUB_RUN_ID} against WC-007 and the binding architecture-first P0.5 state. Run product/tests and falsify: architecture reconstruction fidelity; topology/policy representation; agent/task/model provenance confidence; real HTTPS ingestion; pagination/rate-limit/network handling; classification/outcome attribution; certain structural-waste precision; privacy-safe unlinkable architecture export; no/partial/complete billing honesty; and ability to attach later real billing without schema redesign. The primary corpus must be high-identifiability and messy cases must remain a separate robustness set. Write reports/latest-product-audit.md and, when executed real-corpus evidence exists, reports/real-world-robustness.md. Never mark a gate passed from fixtures alone."
+            "Adversarially audit the integrated Beetlejuice candidate from Factory cycle ${GITHUB_RUN_ID} against the active gate in durable state and binding workcards/objective. While P0.5 is unfinished, falsify WC-007 architecture reconstruction fidelity, topology/policy representation, provenance confidence, real HTTPS ingestion, pagination/rate-limit/network handling, classification/outcome attribution, certain structural-waste precision, unlinkable privacy export, billing honesty and later billing attachment. Once P0_5_READY is verified, audit P1 and subsequent active roadmap claims instead of repeating completed P0.5 work. Write reports/latest-product-audit.md and any gate-specific executed-evidence report. Never mark a gate passed from fixtures/prose when real evidence is required."
 
       - name: Persist audit snapshot
         if: always()
@@ -341,7 +341,7 @@ jobs:
           git config user.name "beetlejuice-product-auditor"
           git config user.email "beetlejuice-auditor@autonomous.local"
           git add reports || true
-          git commit -m "Factory ${GITHUB_RUN_ID}: adversarial P0.5 architecture audit" || true
+          git commit -m "Factory ${GITHUB_RUN_ID}: adversarial active-gate audit" || true
           git push --force origin "HEAD:refs/heads/cycle/${GITHUB_RUN_ID}/audit"
 
   direction:
@@ -355,7 +355,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Checkout integration with binding main control plane and mount audit
+      - name: Checkout durable integration with binding main policy and mount audit
         shell: bash
         run: |
           set -euo pipefail
@@ -363,7 +363,7 @@ jobs:
           CONTROL=/tmp/beetlejuice-control-plane
           rm -rf "$CONTROL"
           mkdir -p "$CONTROL"
-          for path in .github/scripts .opencode AGENTS.md docs state/factory.json; do
+          for path in .github/scripts .opencode AGENTS.md docs; do
             if git cat-file -e "origin/main:${path}" 2>/dev/null; then
               git archive --format=tar origin/main "$path" | tar -xf - -C "$CONTROL"
             fi
@@ -382,15 +382,15 @@ jobs:
         shell: bash
         run: bash .github/scripts/install-opencode-with-retry.sh
 
-      - name: Set evidence-gated factory direction
+      - name: Set evidence-gated autonomous direction
         shell: bash
         run: |
           bash .github/scripts/run-opencode-with-retry.sh run \
             --model "$BEETLEJUICE_MODEL" \
             --agent product_director \
-            "Close Factory cycle ${GITHUB_RUN_ID} using the binding current-main P0.5 architecture-first control plane. P0 is already verified. P0.5 outranks P1. Read the latest audit and real-world robustness report if present and re-run targeted verification where useful. Update state/factory.json truthfully. A P0.5 item may be true only from executed evidence matching WC-007; real-corpus gates cannot pass from fixtures/prose. If any P0.5 gap is buildable in-repo, keep continue=true and next_action must name the highest-value concrete architecture/real-world gap. Never stop because this cycle had a failed lane/test/network/provider call. Do not resume P1 until P0_5_READY is defensible."
+            "Close Factory cycle ${GITHUB_RUN_ID} using binding current-main policy and cumulative lab/integration state. Determine the highest-priority unfinished gate from state/factory.json, docs/PRODUCT_OBJECTIVE.md and workcards. P0 is verified. Until P0_5_READY is defensible, P0.5 outranks P1. Once P0.5 is green, advance P1 and then subsequent declared roadmap work; never keep cycling a completed gate. Update state/factory.json truthfully from executed evidence. If any gap is buildable in-repo, keep continue=true and next_action must name the highest-value concrete next experiment/repair/capability. Follow the anti-spin rule after a zero-delta cycle. Never stop because a lane/test/network/provider call failed. Only request human action after every safe repo-local route is exhausted. COMPLETE requires all declared check groups green plus terminal_ready=true and must not be used as a convenience stop."
 
-      - name: Validate and persist factory state
+      - name: Validate liveness and persist factory state
         if: always()
         shell: bash
         run: |
@@ -398,13 +398,43 @@ jobs:
           test -f state/factory.json || { echo "::error::Missing state/factory.json"; exit 1; }
           STATUS=$(jq -r '.status // empty' state/factory.json)
           CONTINUE=$(jq -r '.continue // empty' state/factory.json)
+          REQUIRES_USER=$(jq -r '.requires_user_action // false' state/factory.json)
+          LOCAL_EXHAUSTED=$(jq -r '.repo_local_work_exhausted // false' state/factory.json)
+          TERMINAL_READY=$(jq -r '.terminal_ready // false' state/factory.json)
+          REMAINING=$(jq '[to_entries[] | select(.key | endswith("_checks")) | select(.value | type == "object") | .value | to_entries[] | select(.value == false)] | length' state/factory.json)
+          CHECK_GROUPS=$(jq '[to_entries[] | select(.key | endswith("_checks")) | select(.value | type == "object")] | length' state/factory.json)
+
           case "$STATUS" in BUILDING|INTEGRATING|BLOCKED_EXTERNAL|P0_READY|P0_5_READY|COMPLETE) ;; *) echo "::error::Invalid factory status: $STATUS"; exit 1;; esac
           case "$CONTINUE" in true|false) ;; *) echo "::error::Invalid continue flag"; exit 1;; esac
+
+          # No LLM may silently stop useful repo-local work. Normalize premature
+          # stop states before persistence; the supervisor independently enforces
+          # the same terminal predicate as a second line of defense.
+          if [[ "$STATUS" == "COMPLETE" && ! ( "$REMAINING" -eq 0 && "$CHECK_GROUPS" -gt 0 && "$TERMINAL_READY" == true ) ]]; then
+            echo "::warning::Premature COMPLETE rejected: remaining=$REMAINING terminal_ready=$TERMINAL_READY"
+            STATUS=BUILDING
+            CONTINUE=true
+          fi
+          if [[ "$CONTINUE" != true && ! ( "$STATUS" == "COMPLETE" || ( "$REQUIRES_USER" == true && "$LOCAL_EXHAUSTED" == true ) ) ]]; then
+            echo "::warning::Premature continue=false rejected while repo-local work may remain."
+            CONTINUE=true
+          fi
+          if [[ "$STATUS" == "BLOCKED_EXTERNAL" && ! ( "$REQUIRES_USER" == true && "$LOCAL_EXHAUSTED" == true ) ]]; then
+            echo "::warning::BLOCKED_EXTERNAL is non-terminal while repo-local work remains."
+            STATUS=BUILDING
+            CONTINUE=true
+          fi
+
           TMP=$(mktemp)
-          jq --arg commit "$(git rev-parse HEAD)" --argjson cycle "${GITHUB_RUN_ID}" '.last_verified_commit=$commit | .cycle=$cycle' state/factory.json > "$TMP"
+          jq --arg commit "$(git rev-parse HEAD)" \
+             --argjson cycle "${GITHUB_RUN_ID}" \
+             --arg status "$STATUS" \
+             --argjson cont "$CONTINUE" \
+             '.last_verified_commit=$commit | .cycle=$cycle | .status=$status | .continue=$cont' \
+             state/factory.json > "$TMP"
           mv "$TMP" state/factory.json
           git config user.name "beetlejuice-product-director"
           git config user.email "beetlejuice-director@autonomous.local"
           git add state reports || true
-          git commit -m "Factory ${GITHUB_RUN_ID}: P0.5 product direction" || true
+          git commit -m "Factory ${GITHUB_RUN_ID}: autonomous product direction" || true
           git push origin HEAD:refs/heads/lab/integration
