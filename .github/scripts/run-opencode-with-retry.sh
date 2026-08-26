@@ -17,6 +17,7 @@ NETWORK_RE='(network_error|NetworkError|network error|fetch failed|APIConnection
 CONTROL_PATHS=(
   "AGENTS.md"
   ".opencode/agents"
+  "docs/MASTER_PROMPT_ORIGINAL_FR.md"
   "docs/MASTER_PROMPT.md"
   "docs/PRODUCT_OBJECTIVE.md"
   "docs/agents"
@@ -64,7 +65,7 @@ stage_control_plane() {
 
   rm -rf /tmp/beetlejuice_control
   mkdir -p /tmp/beetlejuice_control
-  for path in AGENTS.md .opencode/agents docs/MASTER_PROMPT.md docs/PRODUCT_OBJECTIVE.md docs/agents docs/workcards; do
+  for path in AGENTS.md .opencode/agents docs/MASTER_PROMPT_ORIGINAL_FR.md docs/MASTER_PROMPT.md docs/PRODUCT_OBJECTIVE.md docs/agents docs/workcards; do
     if [[ -e "$path" ]]; then
       mkdir -p "/tmp/beetlejuice_control/$(dirname "$path")"
       cp -a "$path" "/tmp/beetlejuice_control/$path"
