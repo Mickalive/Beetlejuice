@@ -10,14 +10,15 @@ The first release MUST create value with one customer/repository and MUST NOT de
 ## V1 promise
 Connect/install Beetlejuice read-only, reconstruct recent agentic-task economics from GitHub history, then show:
 
-- total measured agentic engineering cost;
+- measured agentic engineering cost for the components actually evidenced;
 - successful/accepted outcomes;
-- cost per successful outcome;
-- certainly avoidable spend;
+- cost per successful outcome only at the evidence completeness actually available;
+- certainly avoidable spend only where monetary evidence exists;
+- useful non-dollar operational waste evidence when billing is incomplete;
 - evidence for every waste finding;
 - conservative recommendations.
 
-Never present guessed savings as certain savings.
+Never present guessed savings as certain savings. Never present partial cost evidence as a total cost. Missing billing is an explicit evidence state, not zero.
 
 ## P0 definition of done
 The repository is not “done” because architecture exists. P0 is done only when all of the following are true:
@@ -35,8 +36,25 @@ The repository is not “done” because architecture exists. P0 is done only wh
 11. README contains a reproducible local quickstart and clearly distinguishes synthetic demo from real GitHub mode.
 12. CI is green on the integration candidate.
 
+## P0.5 — real-world robustness and billing viability gate
+P0 passing is not enough to productize. Before P1, Beetlejuice MUST be falsified against messy real GitHub histories and the billing-evidence problem.
+
+Binding workcard: `docs/workcards/WC-007-REAL-WORLD-ROBUSTNESS.md`.
+
+The gate requires executed evidence from at least 5, preferably 10, real public repositories containing genuine agentic/bot software work and varied workflow histories. It must exercise pagination, large histories, reruns/cancellations, incomplete PR↔Actions relationships, ambiguous outcomes, classification uncertainty, network/rate-limit failures and real HTTPS GitHub ingestion.
+
+The gate also proves three billing states:
+
+- **GitHub-only/no model billing:** remain useful for observable outcomes/retries/waste evidence, but do not claim total dollars or total cost per outcome.
+- **Partial billing:** compute only evidenced components and label coverage/partiality explicitly; never extrapolate a fake total.
+- **Complete billing:** only here may Beetlejuice label the result total measured economic cost and total cost per successful outcome.
+
+A known false-positive finding labeled `certain`, an unhandled real-history crash, or a product that becomes useless unless missing billing is guessed is a P0.5 failure.
+
+Persist the executed verdict in `reports/real-world-robustness.md`. Do not mark P0.5 ready from fixtures alone.
+
 ## P1 — installable GitHub App prototype
-After P0 is stable, finish the minimum GitHub App surface:
+Only after P0.5 is green, finish the minimum GitHub App surface:
 
 - least-privilege, read-only permissions by default;
 - webhook signature verification;
@@ -50,7 +68,7 @@ After P0 is stable, finish the minimum GitHub App surface:
 Add more certain-waste rules only when they are objectively defensible from observable evidence: superseded runs, duplicated checks/tests, identical retries after deterministic failure, abandoned work, obvious missing caching and similarly provable waste.
 
 ## Not in the critical path
-Do not spend P0 time on pricing, enterprise billing, a generic observability platform, full orchestration, model training, cross-customer recommender training, SPIDER hypothesis testing, or a polished marketing site.
+Do not spend P0/P0.5 time on pricing, enterprise billing infrastructure, a generic observability platform, full orchestration, model training, cross-customer recommender training, SPIDER hypothesis testing, or a polished marketing site. Billing evidence ingestion needed to falsify the V1 economics claim IS in the P0.5 critical path; building a full billing product is not.
 
 ## Required data boundaries
 Keep three layers distinct:
@@ -80,24 +98,26 @@ Agents should avoid root/config churn unless their workcard explicitly requires 
   "schema_version": "1",
   "status": "BUILDING",
   "continue": true,
-  "next_action": "IMPLEMENT_P0",
+  "next_action": "IMPLEMENT_P0_5_REAL_WORLD_GATE",
   "blocking_reason": null,
   "p0_checks": {},
   "last_verified_commit": null
 }
 ```
 
-Allowed top-level status values: `BUILDING`, `INTEGRATING`, `BLOCKED_EXTERNAL`, `P0_READY`, `COMPLETE`.
+Allowed top-level status values: `BUILDING`, `INTEGRATING`, `BLOCKED_EXTERNAL`, `P0_READY`, `P0_5_READY`, `COMPLETE`.
 
 The supervisor relaunches only while `continue=true` and status is not `BLOCKED_EXTERNAL`/`COMPLETE`.
 
 ## Product director rule
 At the end of every integration cycle, update `state/factory.json` from verified repository evidence. If a missing item is buildable inside the repository, keep `continue=true` and name the next concrete action. Use `BLOCKED_EXTERNAL` only when progress genuinely requires an external credential/account/decision that cannot be simulated or deferred.
 
+After P0 is green, P0.5 outranks P1 until `reports/real-world-robustness.md` proves the real-world gate. P1 work may be retained if already built, but it must not be used as a substitute for P0.5 evidence.
+
 ## Stop rule
 The autonomous loop may stop only when:
 
-- P0 is verified and state is `P0_READY` pending an intentionally external installation step; or
+- P0.5 is verified and state is `P0_5_READY` pending intentionally external installation/product steps; or
 - the requested product scope is complete; or
 - there is a real external blocker documented with the exact smallest user action required.
 
