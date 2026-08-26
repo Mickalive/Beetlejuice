@@ -28,15 +28,17 @@ jobs:
   continuity:
     name: Ensure autonomous product continuity
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+
     steps:
-      - name: Purge obsolete completed Actions runs
+      - name: Housekeep obsolete runs and cycle branches
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          KEEP_PER_ACTIVE_WORKFLOW=5
+
+          KEEP_PER_ACTIVE_WORKFLOW=3
           ACTIVE_NAMES=(
             "BEETLEJUICE Product CI"
             "BEETLEJUICE Product Factory"
@@ -56,7 +58,6 @@ jobs:
             gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs?per_page=100" \
               --jq '.workflow_runs[] | [.id,.name,.status,.created_at] | @tsv'
           )
-          declare -A KEPT_BY_NAME=()
 
           is_active_name() {
             local candidate="$1"
@@ -65,17 +66,23 @@ jobs:
             done
             return 1
           }
+
           is_evidence_run() {
             local candidate="$1"
             grep -qx "$candidate" <<<"$PRESERVE_IDS" 2>/dev/null
           }
 
-          DELETED=0
+          declare -A KEPT_BY_NAME=()
+          DELETED_RUNS=0
           for row in "${RUN_ROWS[@]}"; do
             IFS=$'\t' read -r RUN_ID RUN_NAME RUN_STATUS CREATED_AT <<<"$row"
             [[ -n "$RUN_ID" ]] || continue
             [[ "$RUN_STATUS" == "completed" ]] || continue
-            if is_evidence_run "$RUN_ID"; then continue; fi
+
+            if is_evidence_run "$RUN_ID"; then
+              continue
+            fi
+
             if is_active_name "$RUN_NAME"; then
               COUNT=${KEPT_BY_NAME["$RUN_NAME"]:-0}
               if (( COUNT < KEEP_PER_ACTIVE_WORKFLOW )); then
@@ -83,11 +90,44 @@ jobs:
                 continue
               fi
             fi
-            if gh api --method DELETE "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}" >/dev/null 2>&1; then
-              DELETED=$((DELETED + 1))
+
+            if gh api --method DELETE \
+              "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}" >/dev/null 2>&1; then
+              DELETED_RUNS=$((DELETED_RUNS + 1))
             fi
           done
-          echo "Actions cleanup complete: deleted=$DELETED"
+
+          # cycle/<run-id>/<lane> refs are disposable transport branches. Product
+          # progress must already live on lab/integration before a cycle completes.
+          ACTIVE_FACTORY_IDS=$(printf '%s\n' "${RUN_ROWS[@]}" | awk -F '\t' \
+            '$2 == "BEETLEJUICE Product Factory" && $3 != "completed" {print $1}' | sort -u)
+
+          mapfile -t CYCLE_REFS < <(
+            gh api --paginate "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/cycle/" \
+              --jq '.[].ref' 2>/dev/null || true
+          )
+
+          DELETED_BRANCHES=0
+          for REF in "${CYCLE_REFS[@]}"; do
+            [[ "$REF" == refs/heads/cycle/* ]] || continue
+            SHORT=${REF#refs/heads/}
+            RUN_ID=$(cut -d/ -f2 <<<"$SHORT")
+            [[ "$RUN_ID" =~ ^[0-9]+$ ]] || continue
+
+            if grep -qx "$RUN_ID" <<<"$ACTIVE_FACTORY_IDS" 2>/dev/null; then
+              continue
+            fi
+            if is_evidence_run "$RUN_ID"; then
+              continue
+            fi
+
+            if gh api --method DELETE \
+              "repos/${GITHUB_REPOSITORY}/git/refs/heads/${SHORT}" >/dev/null 2>&1; then
+              DELETED_BRANCHES=$((DELETED_BRANCHES + 1))
+            fi
+          done
+
+          echo "Housekeeping complete: deleted_runs=$DELETED_RUNS deleted_cycle_branches=$DELETED_BRANCHES"
 
       - name: Recover stale cycles, preserve durable state, and relaunch work
         env:
@@ -111,38 +151,35 @@ jobs:
 
           RUNS=$(load_runs)
 
-          # Any control-plane change invalidates older active executions. They may
-          # contain an obsolete model/watchdog/mission policy and must not linger.
+          # A control-plane update invalidates older active cycles.
           if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
             CHANGED=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}" \
               --jq '.files[]?.filename' 2>/dev/null || true)
             if grep -Eq '^(\.github/workflows/factory-loop\.yml|\.github/scripts/run-opencode-with-retry\.sh|\.github/workflows/factory-supervisor\.yml)$' <<<"$CHANGED"; then
               while IFS= read -r RUN_ID; do
                 [[ -n "$RUN_ID" ]] || continue
-                RUN_SHA=$(jq -r --argjson id "$RUN_ID" '.[] | select(.databaseId == $id) | .headSha' <<<"$RUNS")
-                [[ "$RUN_SHA" == "$GITHUB_SHA" ]] || cancel_run "$RUN_ID" "stale control-plane revision $RUN_SHA"
+                RUN_SHA=$(jq -r --argjson id "$RUN_ID" \
+                  '.[] | select(.databaseId == $id) | .headSha' <<<"$RUNS")
+                [[ "$RUN_SHA" == "$GITHUB_SHA" ]] || \
+                  cancel_run "$RUN_ID" "stale control-plane revision $RUN_SHA"
               done < <(jq -r '.[] | select(.status != "completed") | .databaseId' <<<"$RUNS")
               sleep 5
               RUNS=$(load_runs)
             fi
           fi
 
-          # GitHub-level watchdog. Ox has its own per-call watchdog; this catches
-          # runs that never get a runner or a whole workflow that becomes a zombie.
+          # GitHub-level watchdog. Per-call Ox stalls are handled inside the
+          # OpenCode wrapper; this catches queue starvation and whole-run zombies.
           while IFS=$'\t' read -r RUN_ID RUN_STATUS CREATED_AT; do
             [[ -n "$RUN_ID" ]] || continue
             CREATED_EPOCH=$(date -d "$CREATED_AT" +%s 2>/dev/null || echo "$NOW")
             AGE_MIN=$(( (NOW - CREATED_EPOCH) / 60 ))
             case "$RUN_STATUS" in
               queued|pending|waiting|requested)
-                if (( AGE_MIN > 45 )); then
-                  cancel_run "$RUN_ID" "queued/pending for ${AGE_MIN}m"
-                fi
+                (( AGE_MIN > 45 )) && cancel_run "$RUN_ID" "queued/pending for ${AGE_MIN}m"
                 ;;
               in_progress)
-                if (( AGE_MIN > 480 )); then
-                  cancel_run "$RUN_ID" "workflow zombie older than ${AGE_MIN}m"
-                fi
+                (( AGE_MIN > 480 )) && cancel_run "$RUN_ID" "workflow zombie older than ${AGE_MIN}m"
                 ;;
             esac
           done < <(jq -r '.[] | select(.status != "completed") | [.databaseId,.status,.createdAt] | @tsv' <<<"$RUNS")
@@ -155,9 +192,8 @@ jobs:
             exit 0
           fi
 
-          # lab/integration is the durable scientific/product progress state. main
-          # holds the binding control plane. Merge them after every completed cycle
-          # so the next main-based cycle cannot accidentally reset progress.
+          # main owns policy/control-plane. lab/integration owns cumulative product
+          # progress. Merge the latter into main so no cycle can regress state.
           MAIN_META=$(gh api "repos/${GITHUB_REPOSITORY}/contents/state/factory.json?ref=main" 2>/dev/null || echo '{}')
           MAIN_SHA=$(jq -r '.sha // empty' <<<"$MAIN_META")
           MAIN_STATE=$(jq -r '.content // empty' <<<"$MAIN_META" | tr -d '\n' | base64 -d 2>/dev/null || echo '{}')
@@ -170,8 +206,10 @@ jobs:
 
           MAIN_CYCLE=$(jq -r '.cycle // 0' <<<"$MAIN_STATE" 2>/dev/null || echo 0)
           INT_CYCLE=$(jq -r '.cycle // 0' <<<"$INTEGRATION_STATE" 2>/dev/null || echo 0)
+
           if [[ "$INT_CYCLE" =~ ^[0-9]+$ && "$MAIN_CYCLE" =~ ^[0-9]+$ ]] && (( INT_CYCLE >= MAIN_CYCLE )); then
-            MERGED_STATE=$(jq -S -s '.[0] * .[1]' <(printf '%s' "$MAIN_STATE") <(printf '%s' "$INTEGRATION_STATE"))
+            MERGED_STATE=$(jq -S -s '.[0] * .[1]' \
+              <(printf '%s' "$MAIN_STATE") <(printf '%s' "$INTEGRATION_STATE"))
           else
             MERGED_STATE=$(jq -S . <<<"$MAIN_STATE")
           fi
@@ -198,22 +236,19 @@ jobs:
           CHECK_GROUPS=$(jq '[to_entries[] | select(.key | endswith("_checks")) | select(.value | type == "object")] | length' <<<"$STATE")
           REMAINING=$(jq '[to_entries[] | select(.key | endswith("_checks")) | select(.value | type == "object") | .value | to_entries[] | select(.value == false)] | length' <<<"$STATE")
 
-          # COMPLETE is not trusted merely because an LLM wrote it. It becomes a
-          # terminal state only when all declared machine-checkable gates are green
-          # and the roadmap explicitly certifies terminal readiness.
+          # LLM-written COMPLETE is advisory unless machine gates prove it.
           if [[ "$STATUS" == "COMPLETE" && "$REMAINING" -eq 0 && "$CHECK_GROUPS" -gt 0 && "$TERMINAL_READY" == true ]]; then
-            echo "Factory terminal predicate satisfied: COMPLETE, all gates green, terminal_ready=true."
+            echo "Factory terminal predicate satisfied."
             exit 0
           fi
+
           if [[ "$STATUS" == "COMPLETE" ]]; then
             echo "::warning::Rejecting premature COMPLETE: check_groups=$CHECK_GROUPS remaining_false_gates=$REMAINING terminal_ready=$TERMINAL_READY"
             STATUS="BUILDING"
             CONTINUE=true
           fi
 
-          # BLOCKED_EXTERNAL and continue=false are advisory, not terminal. The
-          # machine may stop for a human only when both flags explicitly certify
-          # that every repo-local avenue has been exhausted.
+          # Human pause is valid only after every repo-local avenue is exhausted.
           if [[ "$REQUIRES_USER" == true && "$LOCAL_EXHAUSTED" == true ]]; then
             echo "All repo-local work exhausted and explicit human action required. Pausing safely. next_action=$NEXT_ACTION"
             exit 0
@@ -223,5 +258,5 @@ jobs:
             echo "Overriding non-terminal stop: status=$STATUS continue=$CONTINUE remaining_false_gates=$REMAINING"
           fi
 
-          echo "Relaunching autonomous Beetlejuice factory: status=$STATUS check_groups=$CHECK_GROUPS remaining_false_gates=$REMAINING next_action=$NEXT_ACTION"
+          echo "Relaunching autonomous Beetlejuice factory: status=$STATUS remaining_false_gates=$REMAINING next_action=$NEXT_ACTION"
           gh workflow run factory-loop.yml --repo "$GITHUB_REPOSITORY" --ref main
