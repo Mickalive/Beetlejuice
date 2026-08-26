@@ -1,0 +1,595 @@
+{
+  "export_type": "beetlejuice_core_audit_export",
+  "export_version": "1",
+  "producer": "packages/core TenantLedger.audit() @ coreSchemaVersion 1",
+  "analysis_period": {
+    "from_iso": "2026-08-03T09:00:00Z",
+    "to_iso": "2026-08-07T15:00:00Z"
+  },
+  "audit": {
+    "tasks": [
+      {
+        "taskRef": "task-alpha",
+        "startedSeq": 1,
+        "lastSeq": 13,
+        "lastTime": "2026-08-04T08:00:00Z",
+        "eventCount": 13,
+        "adapters": [
+          "synthetic-probe"
+        ],
+        "executions": [
+          {
+            "executionRef": "x1",
+            "revisionKey": "rev-a1",
+            "status": "superseded",
+            "failureClass": null,
+            "supersededBy": "x2",
+            "startedSeq": 2,
+            "finishedSeq": 6,
+            "components": {
+              "modelInvocations": [
+                {
+                  "ref": "m1",
+                  "kind": "inference",
+                  "seq": 3,
+                  "cost": {
+                    "known": true,
+                    "micro_usd": 2400000
+                  },
+                  "payload": {
+                    "invocation_ref": "m1",
+                    "status": "ok",
+                    "cost": {
+                      "known": true,
+                      "micro_usd": 2400000
+                    },
+                    "model_class": "frontier",
+                    "attempt_equivalence_key": "alpha-attempt-1",
+                    "tokens_in": 41200,
+                    "tokens_out": 3800
+                  }
+                }
+              ],
+              "toolInvocations": [
+                {
+                  "ref": "t1",
+                  "kind": "tools",
+                  "seq": 4,
+                  "cost": {
+                    "known": true,
+                    "micro_usd": 300000
+                  },
+                  "payload": {
+                    "tool_ref": "t1",
+                    "status": "ok",
+                    "cost": {
+                      "known": true,
+                      "micro_usd": 300000
+                    },
+                    "tool_class": "test-runner"
+                  }
+                }
+              ],
+              "computeUsage": [],
+              "ciRuns": [
+                {
+                  "ref": "c1",
+                  "kind": "ci",
+                  "seq": 5,
+                  "cost": {
+                    "known": true,
+                    "micro_usd": 800000
+                  },
+                  "payload": {
+                    "ci_ref": "c1",
+                    "status": "passed",
+                    "cost": {
+                      "known": true,
+                      "micro_usd": 800000
+                    },
+                    "equivalence_key": "build-and-test",
+                    "revision_key": "rev-a1",
+                    "started_at": "2026-08-03T09:45:00Z",
+                    "finished_at": "2026-08-03T09:55:00Z",
+                    "duration_ms": 600000
+                  }
+                }
+              ],
+              "validations": [],
+              "humanInterventions": []
+            }
+          },
+          {
+            "executionRef": "x2",
+            "revisionKey": "rev-a2",
+            "status": "running",
+            "failureClass": null,
+            "supersededBy": null,
+            "startedSeq": 7,
+            "finishedSeq": null,
+            "components": {
+              "modelInvocations": [
+                {
+                  "ref": "m2",
+                  "kind": "inference",
+                  "seq": 8,
+                  "cost": {
+                    "known": true,
+                    "micro_usd": 2100000
+                  },
+                  "payload": {
+                    "invocation_ref": "m2",
+                    "status": "ok",
+                    "cost": {
+                      "known": true,
+                      "micro_usd": 2100000
+                    },
+                    "model_class": "frontier",
+                    "attempt_equivalence_key": "alpha-attempt-2",
+                    "tokens_in": 39800,
+                    "tokens_out": 4100
+                  }
+                }
+              ],
+              "toolInvocations": [],
+              "computeUsage": [],
+              "ciRuns": [
+                {
+                  "ref": "c2",
+                  "kind": "ci",
+                  "seq": 9,
+                  "cost": {
+                    "known": true,
+                    "micro_usd": 800000
+                  },
+                  "payload": {
+                    "ci_ref": "c2",
+                    "status": "passed",
+                    "cost": {
+                      "known": true,
+                      "micro_usd": 800000
+                    },
+                    "equivalence_key": "build-and-test",
+                    "revision_key": "rev-a1",
+                    "started_at": "2026-08-03T10:35:00Z",
+                    "finished_at": "2026-08-03T10:45:00Z",
+                    "duration_ms": 600000
+                  }
+                }
+              ],
+              "validations": [],
+              "humanInterventions": []
+            }
+          }
+        ],
+        "unassignedComponents": {
+          "modelInvocations": [],
+          "toolInvocations": [],
+          "computeUsage": [],
+          "ciRuns": [],
+          "validations": [],
+          "humanInterventions": []
+        },
+        "pullRequests": [
+          {
+            "prRef": "pr-77",
+            "created": true,
+            "closed": false,
+            "merged": true,
+            "createdSeq": 10,
+            "closedSeq": null,
+            "mergedSeq": 12
+          }
+        ],
+        "retries": 0,
+        "humanReworkEvents": 1,
+        "revertSignals": 1,
+        "outcome": {
+          "kind": "accepted",
+          "attribution": "measured",
+          "detail": "merged pull request evidence: pr-77",
+          "mergedPrRefs": [
+            "pr-77"
+          ],
+          "reverted": true
+        }
+      },
+      {
+        "taskRef": "task-beta",
+        "startedSeq": 14,
+        "lastSeq": 18,
+        "lastTime": "2026-08-05T09:00:00Z",
+        "eventCount": 5,
+        "adapters": [
+          "synthetic-probe"
+        ],
+        "executions": [],
+        "unassignedComponents": {
+          "modelInvocations": [
+            {
+              "ref": "m3",
+              "kind": "inference",
+              "seq": 15,
+              "cost": {
+                "known": true,
+                "micro_usd": 1200000
+              },
+              "payload": {
+                "invocation_ref": "m3",
+                "status": "error",
+                "failure_class": "auth_error",
+                "cost": {
+                  "known": true,
+                  "micro_usd": 1200000
+                },
+                "model_class": "frontier",
+                "attempt_equivalence_key": "beta-key-K1",
+                "tokens_in": 30100,
+                "tokens_out": 2600
+              }
+            },
+            {
+              "ref": "m4",
+              "kind": "inference",
+              "seq": 17,
+              "cost": {
+                "known": true,
+                "micro_usd": 1150000
+              },
+              "payload": {
+                "invocation_ref": "m4",
+                "status": "error",
+                "failure_class": "auth_error",
+                "cost": {
+                  "known": true,
+                  "micro_usd": 1150000
+                },
+                "model_class": "frontier",
+                "attempt_equivalence_key": "beta-key-K1",
+                "tokens_in": 29800,
+                "tokens_out": 2400
+              }
+            }
+          ],
+          "toolInvocations": [],
+          "computeUsage": [],
+          "ciRuns": [],
+          "validations": [],
+          "humanInterventions": []
+        },
+        "pullRequests": [],
+        "retries": 1,
+        "humanReworkEvents": 0,
+        "revertSignals": 0,
+        "outcome": {
+          "kind": "failed",
+          "attribution": "measured",
+          "detail": "task_failed signal observed",
+          "mergedPrRefs": [],
+          "reverted": false
+        }
+      },
+      {
+        "taskRef": "task-delta",
+        "startedSeq": 26,
+        "lastSeq": 29,
+        "lastTime": "2026-08-07T15:00:00Z",
+        "eventCount": 4,
+        "adapters": [
+          "synthetic-probe"
+        ],
+        "executions": [],
+        "unassignedComponents": {
+          "modelInvocations": [
+            {
+              "ref": "m7",
+              "kind": "inference",
+              "seq": 27,
+              "cost": {
+                "known": true,
+                "micro_usd": 1600000
+              },
+              "payload": {
+                "invocation_ref": "m7",
+                "status": "ok",
+                "cost": {
+                  "known": true,
+                  "micro_usd": 1600000
+                },
+                "model_class": "frontier",
+                "attempt_equivalence_key": "delta-key-1",
+                "tokens_in": 27500,
+                "tokens_out": 3100
+              }
+            }
+          ],
+          "toolInvocations": [],
+          "computeUsage": [],
+          "ciRuns": [],
+          "validations": [
+            {
+              "ref": "v1",
+              "kind": "validation",
+              "seq": 28,
+              "cost": {
+                "known": false,
+                "reason": "no billing evidence available"
+              },
+              "payload": {
+                "validation_ref": "v1",
+                "status": "passed",
+                "cost": {
+                  "known": false,
+                  "reason": "no billing evidence available"
+                }
+              }
+            }
+          ],
+          "humanInterventions": []
+        },
+        "pullRequests": [
+          {
+            "prRef": "pr-91",
+            "created": true,
+            "closed": false,
+            "merged": false,
+            "createdSeq": 29,
+            "closedSeq": null,
+            "mergedSeq": null
+          }
+        ],
+        "retries": 0,
+        "humanReworkEvents": 0,
+        "revertSignals": 0,
+        "outcome": {
+          "kind": "unresolved",
+          "attribution": "partial",
+          "detail": "no terminal outcome signal in observed evidence",
+          "mergedPrRefs": [],
+          "reverted": false
+        }
+      },
+      {
+        "taskRef": "task-gamma",
+        "startedSeq": 19,
+        "lastSeq": 25,
+        "lastTime": "2026-08-06T10:50:00Z",
+        "eventCount": 7,
+        "adapters": [
+          "synthetic-probe"
+        ],
+        "executions": [
+          {
+            "executionRef": "y1",
+            "revisionKey": "rev-g1",
+            "status": "completed",
+            "failureClass": null,
+            "supersededBy": null,
+            "startedSeq": 20,
+            "finishedSeq": 22,
+            "components": {
+              "modelInvocations": [
+                {
+                  "ref": "m5",
+                  "kind": "inference",
+                  "seq": 21,
+                  "cost": {
+                    "known": true,
+                    "micro_usd": 900000
+                  },
+                  "payload": {
+                    "invocation_ref": "m5",
+                    "status": "ok",
+                    "cost": {
+                      "known": true,
+                      "micro_usd": 900000
+                    },
+                    "model_class": "small",
+                    "attempt_equivalence_key": "gamma-key-1"
+                  }
+                }
+              ],
+              "toolInvocations": [],
+              "computeUsage": [],
+              "ciRuns": [],
+              "validations": [],
+              "humanInterventions": []
+            }
+          },
+          {
+            "executionRef": "y2",
+            "revisionKey": "rev-g1",
+            "status": "running",
+            "failureClass": null,
+            "supersededBy": null,
+            "startedSeq": 24,
+            "finishedSeq": null,
+            "components": {
+              "modelInvocations": [
+                {
+                  "ref": "m6",
+                  "kind": "inference",
+                  "seq": 25,
+                  "cost": {
+                    "known": true,
+                    "micro_usd": 1400000
+                  },
+                  "payload": {
+                    "invocation_ref": "m6",
+                    "status": "ok",
+                    "cost": {
+                      "known": true,
+                      "micro_usd": 1400000
+                    },
+                    "model_class": "frontier",
+                    "attempt_equivalence_key": "gamma-key-2"
+                  }
+                }
+              ],
+              "toolInvocations": [],
+              "computeUsage": [],
+              "ciRuns": [],
+              "validations": [],
+              "humanInterventions": []
+            }
+          }
+        ],
+        "unassignedComponents": {
+          "modelInvocations": [],
+          "toolInvocations": [],
+          "computeUsage": [],
+          "ciRuns": [],
+          "validations": [],
+          "humanInterventions": []
+        },
+        "pullRequests": [],
+        "retries": 0,
+        "humanReworkEvents": 0,
+        "revertSignals": 0,
+        "outcome": {
+          "kind": "aborted",
+          "attribution": "measured",
+          "detail": "task_aborted signal observed",
+          "mergedPrRefs": [],
+          "reverted": false
+        }
+      }
+    ],
+    "waste": {
+      "findings": [
+        {
+          "finding_id": "WASTE_DET_RETRY_V1/task-beta/1",
+          "rule_id": "WASTE_DET_RETRY_V1",
+          "rule_version": 1,
+          "task_ref": "task-beta",
+          "confidence": "certain",
+          "wasted_micro_usd": 1150000,
+          "evidence_refs": [
+            "m4"
+          ],
+          "evidence_units": [
+            {
+              "ref": "m4",
+              "kind": "inference",
+              "micro_usd": 1150000,
+              "quantified": true
+            }
+          ],
+          "unquantified_evidence_refs": [],
+          "explanation": "Model invocation \"m4\" retried equivalence key \"beta-key-K1\" after attempt \"m3\" failed with deterministic class \"auth_error\". No attempt with this key ever succeeded, so the deterministic failure reproduced identically; this retry could not succeed and its measured cost $1.15 was certainly avoidable.",
+          "recommendation": "Fail fast on deterministic class \"auth_error\" instead of retrying identical attempt key \"beta-key-K1\"."
+        },
+        {
+          "finding_id": "WASTE_DUP_CI_V1/task-alpha/1",
+          "rule_id": "WASTE_DUP_CI_V1",
+          "rule_version": 1,
+          "task_ref": "task-alpha",
+          "confidence": "certain",
+          "wasted_micro_usd": 800000,
+          "evidence_refs": [
+            "c2"
+          ],
+          "evidence_units": [
+            {
+              "ref": "c2",
+              "kind": "ci",
+              "micro_usd": 800000,
+              "quantified": true
+            }
+          ],
+          "unquantified_evidence_refs": [],
+          "explanation": "CI run \"c2\" started 2026-08-03T10:35:00Z re-executed equivalence key \"build-and-test\" after run \"c1\" had already finished as passed on identical inputs at 2026-08-03T09:55:00Z. Its result could not differ, so its measured cost $0.80 was certainly avoidable.",
+          "recommendation": "Skip CI re-execution for unchanged equivalence key \"build-and-test\"; reuse the existing passed result."
+        },
+        {
+          "finding_id": "WASTE_EXEC_SUPERSEDED_V1/task-alpha/2",
+          "rule_id": "WASTE_EXEC_SUPERSEDED_V1",
+          "rule_version": 1,
+          "task_ref": "task-alpha",
+          "confidence": "certain",
+          "wasted_micro_usd": 3500000,
+          "evidence_refs": [
+            "m1",
+            "t1",
+            "c1"
+          ],
+          "evidence_units": [
+            {
+              "ref": "m1",
+              "kind": "inference",
+              "micro_usd": 2400000,
+              "quantified": true
+            },
+            {
+              "ref": "t1",
+              "kind": "tools",
+              "micro_usd": 300000,
+              "quantified": true
+            },
+            {
+              "ref": "c1",
+              "kind": "ci",
+              "micro_usd": 800000,
+              "quantified": true
+            }
+          ],
+          "unquantified_evidence_refs": [],
+          "explanation": "Execution \"x1\" in task \"task-alpha\" was superseded by later execution \"x2\", so its work product cannot contribute to the task outcome. Measured cost of its components (\"m1\", \"t1\", \"c1\") totaling $3.50 was certainly avoidable.",
+          "recommendation": "Prevent re-doing superseded objectives: cancel or checkpoint superseded executions like \"x1\" before their replacement starts."
+        }
+      ],
+      "certainlyAvoidableMicroUsd": 5450000,
+      "claimedEvidenceRefs": [
+        "c1",
+        "c2",
+        "m1",
+        "m4",
+        "t1"
+      ]
+    },
+    "summary": {
+      "totals": {
+        "tasks": 4,
+        "accepted": 1,
+        "failed": 1,
+        "aborted": 1,
+        "unresolved": 1,
+        "acceptedWithRevert": 1,
+        "withHumanRework": 1
+      },
+      "cost": {
+        "currency": "USD",
+        "unit": "micro_usd",
+        "knownMicroUsd": 12650000,
+        "unknownComponentCount": 1,
+        "byKindMicroUsd": {
+          "inference": 10750000,
+          "tools": 300000,
+          "ci": 1600000,
+          "compute": 0,
+          "validation": 0,
+          "human": 0
+        },
+        "costPerAcceptedOutcomeMicroUsd": 12650000,
+        "accountingBalanced": true
+      },
+      "waste": {
+        "findingsCount": 3,
+        "certainlyAvoidableMicroUsd": 5450000,
+        "ratioOfKnownCost": 0.43083,
+        "byRuleMicroUsd": {
+          "WASTE_DET_RETRY_V1": 1150000,
+          "WASTE_DUP_CI_V1": 800000,
+          "WASTE_EXEC_SUPERSEDED_V1": 3500000
+        }
+      },
+      "dataQuality": {
+        "eventCount": 29,
+        "outcomeAttribution": {
+          "measured": 3,
+          "partial": 1
+        }
+      }
+    }
+  }
+}
