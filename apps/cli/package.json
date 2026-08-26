@@ -1,0 +1,11 @@
+{
+  "name": "@beetlejuice/product-cli",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "description": "WC-005 product surface: synthetic agentic audit demo + normalized-input and canonical-core audit modes (zero runtime dependencies).",
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=22"
+  }
+}
