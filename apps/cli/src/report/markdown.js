@@ -205,6 +205,7 @@ export function renderMarkdownReport(report) {
     "synthetic-demo": "synthetic demo — bundled fixture, no GitHub credentials used",
     "normalized-input": "normalized-input mode — consumes adapter-normalized canonical records only",
     "canonical-core": "canonical-core mode — consumes a versioned packages/core TenantLedger.audit() export (one canonical model)",
+    "real-github-read-only": "real-github-read-only mode — live read-only history audit of a configured repository (GET requests only; no writes performed)",
   };
 
   return `# Beetlejuice Audit — Agentic Economics Report

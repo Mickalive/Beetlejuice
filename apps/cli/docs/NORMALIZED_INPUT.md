@@ -58,10 +58,15 @@ Guarantees (pinned by `test/bundle.test.js`):
 
 Producer status today (measured, not aspirational): the synthetic fixture
 generator uses this contract, and any adapter can adopt the helper directly.
-Until the GitHub adapter lane wires its mapper to it, the **real GitHub
-read-only path is seam B** (`collectHistory → TenantLedger → --core-audit`),
-which is exercised end-to-end by the committed cross-package test
-(`test/cross-package-seam.test.js`).
+The **GitHub adapter ships a producer of this exact envelope**
+(`@beetlejuice/github` `buildNormalizedBundle(evidence, { costSource? })`,
+pinned by its own suite and by the committed cross-producer round-trip test
+`test/integration/github-bundle-input-seam.test.js`, which feeds an
+adapter-built envelope through `--input`). The one-command real GitHub path is
+`npm run demo -- --github OWNER/REPO`, which wires
+`collectHistory → TenantLedger → exportCoreAudit → --core-audit`-style
+consumption internally (seam B) and is exercised end-to-end by
+`test/integration/github-real-mode.test.js`.
 
 ## `agentic_task` record
 

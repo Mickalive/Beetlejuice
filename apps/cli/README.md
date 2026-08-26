@@ -28,11 +28,17 @@ reports (pinned by `test/determinism.test.js`).
 
 | Mode | Command | Input contract |
 | --- | --- | --- |
-| normalized-input | `npm run demo -- --input FILE.json` | versioned schema-v2 bundle of canonical `agentic_task` records — see [docs/NORMALIZED_INPUT.md](docs/NORMALIZED_INPUT.md); produce envelopes with `buildNormalizedBundle()` |
+| real-github-read-only | `npm run demo -- --github OWNER/REPO` | live repository history collected with strictly GET requests; requires `BEETLEJUICE_GITHUB_TOKEN` (read-only PAT/App token). Missing token ⇒ exit 2 refusal, never a fabricated audit. Costs without operator billing evidence are reported as *unavailable*, not guessed. Wired internally through `collectHistory → assembleAudit → TenantLedger → exportCoreAudit → this surface`. |
+| normalized-input | `npm run demo -- --input FILE.json` | versioned schema-v2 bundle of canonical `agentic_task` records — see [docs/NORMALIZED_INPUT.md](docs/NORMALIZED_INPUT.md); produce envelopes with `buildNormalizedBundle()` (the GitHub adapter ships its own producer of the same contract: `@beetlejuice/github buildNormalizedBundle`) |
 | canonical-core | `npm run demo -- --core-audit FILE.json` | versioned `packages/core` `TenantLedger.audit()` export (`ledger.exportCoreAudit()`) — economics are computed by core and consumed verbatim |
 
-Both modes refuse raw provider payloads with exit code 2 — adapters must
-normalize before this boundary.
+All three modes refuse raw provider payloads with exit code 2 — adapters must
+normalize before this boundary. Reports carry their mode label so synthetic
+demo output can never be mistaken for a real repository audit.
+
+Committed e2e coverage for the real modes lives in the repo-root
+`test/integration/` directory (`--github` mode over an in-memory GitHub
+transport; adapter bundle → `--input`; tenant ledger → privacy gate).
 
 ## Library use (dashboard/server ready)
 

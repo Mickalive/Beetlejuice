@@ -29,15 +29,23 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Count only FIRST-PARTY test files: prune dependencies AND vendored
+          # dot-directories (.opencode tooling) so vendored zod tests etc.
+          # can never inflate the count (audit A6/R6). The floor of 20 matches
+          # the integrated product's real suite scale; scaffolds without
+          # product tests cannot pass by counting dependency tests.
           TEST_COUNT=$(find . \
             -path './node_modules' -prune -o \
+            -path './.opencode' -prune -o \
+            -path '*/node_modules' -prune -o \
+            \( -path './.github' -o -path './.git' \) -prune -o \
             -type f \( -path '*/test/*' -o -path '*/tests/*' -o -name '*.test.*' -o -name '*.spec.*' \) \
             -print | wc -l)
-          if [[ "$TEST_COUNT" -lt 1 ]]; then
-            echo "::error::No test files found. A zero-test green build is forbidden."
+          if [[ "$TEST_COUNT" -lt 20 ]]; then
+            echo "::error::Fewer than 20 first-party test files found ($TEST_COUNT). A scaffold-only or vacuously-green build is forbidden."
             exit 1
           fi
-          echo "Detected $TEST_COUNT test file(s)."
+          echo "Detected $TEST_COUNT first-party test file(s)."
       - name: Unit and integration tests
         run: npm test
       - name: Synthetic product audit

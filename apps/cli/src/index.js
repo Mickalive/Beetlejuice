@@ -39,3 +39,9 @@ export {
 export { renderMarkdownReport, renderJsonReport } from "./report/markdown.js";
 export { loadSyntheticFixture, loadLegacyV1Fixture } from "./synthetic.js";
 export { runCli, printHelp } from "./demo.js";
+export {
+  runGithubReadOnly,
+  parseOwnerRepo,
+  GITHUB_TOKEN_ENV,
+  REAL_GITHUB_MODE,
+} from "./github_mode.js";

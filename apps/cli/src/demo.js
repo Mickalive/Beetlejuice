@@ -3,12 +3,16 @@
 //   npm run demo                              → complete synthetic audit (no credentials)
 //   npm run demo -- --input FILE              → real read-only mode over adapter-normalized records
 //   npm run demo -- --core-audit FILE         → canonical-core mode over a TenantLedger.audit() export
+//   npm run demo -- --github OWNER/REPO       → real read-only audit of that repository
+//                                             (requires BEETLEJUICE_GITHUB_TOKEN; see README)
 //   npm run demo -- --out DIR                 → also write audit-report.md / audit-report.json
 //
 // The surface never parses raw provider payloads: input must be either the
 // versioned normalized bundle emitted by an adapter (see
 // docs/NORMALIZED_INPUT.md) or a versioned packages/core audit export — one
-// canonical model does the economics.
+// canonical model does the economics. The --github mode wires the adapter,
+// the tenant ledger and this surface together internally and is labeled
+// `real-github-read-only` in every report it produces.
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -16,15 +20,18 @@ import { pathToFileURL } from "node:url";
 import { buildAuditReport, buildReportFromCoreAudit } from "./audit.js";
 import { renderMarkdownReport, renderJsonReport } from "./report/markdown.js";
 import { loadSyntheticFixture } from "./synthetic.js";
+import { GITHUB_TOKEN_ENV, parseOwnerRepo, runGithubReadOnly } from "./github_mode.js";
 
 function parseArgs(argv) {
-  const args = { input: null, coreAudit: null, out: null, format: "md" };
+  const args = { input: null, coreAudit: null, github: null, out: null, format: "md" };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === "--input") {
       args.input = argv[++i] ?? null;
     } else if (arg === "--core-audit") {
       args.coreAudit = argv[++i] ?? null;
+    } else if (arg === "--github") {
+      args.github = argv[++i] ?? null;
     } else if (arg === "--out") {
       args.out = argv[++i] ?? null;
     } else if (arg === "--format") {
@@ -41,6 +48,9 @@ function parseArgs(argv) {
   if (args.input && args.coreAudit) {
     throw new Error("--input and --core-audit are mutually exclusive ingestion seams");
   }
+  if (args.github && (args.input || args.coreAudit)) {
+    throw new Error("--github performs its own read-only collection and is mutually exclusive with --input/--core-audit");
+  }
   return args;
 }
 
@@ -55,16 +65,24 @@ Options:
                        (adapter output; schema v2). Omit to run the bundled synthetic demo.
   --core-audit <file>  Path to a versioned packages/core TenantLedger.audit() export
                        (canonical-core seam: one canonical model does the economics).
+  --github OWNER/REPO  Real read-only audit of that GitHub repository via its history.
+                       Requires ${GITHUB_TOKEN_ENV} to be set (fine-grained PAT or App token,
+                       read-only: Actions/Contents/Pull requests read). No writes are ever performed.
   --out <dir>          Write audit-report.md and/or audit-report.json into <dir>.
   --format <fmt>       md | json | both (stdout format; files honor it too)
   -h, --help           Show this help.
 
 Modes:
   default                synthetic-demo — complete audit from the bundled fixture,
-                         zero GitHub credentials required.
-  --input <file>         normalized-input — real read-only mode. Raw provider
-                         payloads are rejected by design.
-  --core-audit <file>    canonical-core — renders packages/core audit output verbatim.`;
+                         zero GitHub credentials required. Reports are labeled
+                         "synthetic demo" and are NOT a real repository audit.
+  --input <file>         normalized-input — real data over adapter-normalized records.
+                         Raw provider payloads are rejected by design.
+  --core-audit <file>    canonical-core — renders packages/core audit output verbatim.
+  --github OWNER/REPO    real-github-read-only — collects PR/Actions/check-run history
+                         (GET only), reconstructs agentic-task economics in packages/core
+                         and renders the report. Upstream/network failures exit non-zero;
+                         nothing is fabricated.`;
 }
 
 function readJsonFile(filePath) {
@@ -99,7 +117,32 @@ export async function runCli(argv) {
   }
 
   let report;
-  if (args.input || args.coreAudit) {
+  if (args.github) {
+    let spec;
+    try {
+      spec = parseOwnerRepo(args.github);
+    } catch (error) {
+      process.stderr.write(`error: ${error.message}\n`);
+      return 2;
+    }
+    try {
+      const { report: ghReport } = await runGithubReadOnly({
+        owner: spec.owner,
+        repo: spec.repo,
+        token: process.env[GITHUB_TOKEN_ENV] ?? "",
+      });
+      report = ghReport;
+    } catch (error) {
+      if (error.code === "GITHUB_TOKEN_MISSING" || error.code === "SIBLING_PACKAGES_MISSING") {
+        process.stderr.write(`error: ${error.message}\n`);
+        return 2;
+      }
+      process.stderr.write(
+        `GITHUB AUDIT FAILED (${error.name ?? "Error"}${error.code ? ` ${error.code}` : ""}): ${error.message}\n`
+      );
+      return 3;
+    }
+  } else if (args.input || args.coreAudit) {
     const filePath = args.input ?? args.coreAudit;
     const parsed = readJsonFile(filePath);
     if (parsed.error) {
