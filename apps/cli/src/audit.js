@@ -381,6 +381,16 @@ function headlineFromValues({
   // task. That is defensible but invites justified skepticism — surface an
   // explicit, deterministic sanity note instead of staying silent.
   const wasteAtOrAboveRepresentable = avoidableMicroUsd > 0 && avoidableMicroUsd >= representableMicroUsd;
+  // LIVE-REPORT-ZERO-DOLLARS repair (product audit §6): when NO billing
+  // evidence exists at all (representable spend $0 AND unavailable cost
+  // components present), a headline "$0.00" reads as a measured zero-cost
+  // audit when it actually means "unknown". The condition is derived ONCE,
+  // deterministically, so every renderer (markdown today, dashboard later)
+  // shares one definition; numeric fields stay untouched for machine
+  // consumers, and a genuinely measured $0 (no unavailable components) never
+  // trips this flag.
+  const noMeasurableCostEvidence =
+    representableMicroUsd === 0 && Number.isInteger(unavailableComponents) && unavailableComponents > 0;
   return {
     agentic_tasks_total: tasksTotal,
     outcomes,
@@ -404,6 +414,10 @@ function headlineFromValues({
     speculative_savings_note: SPECULATIVE_NOTE,
     certainly_avoidable_spend_sanity_note: wasteAtOrAboveRepresentable
       ? "certainly avoidable spend covers >=100% of representable spend because independent rules claim disjoint, individually evidenced waste (e.g., superseded attempts plus duplicate CI re-runs); each claim traces to its own finding below"
+      : null,
+    no_measurable_cost_evidence_supplied: noMeasurableCostEvidence,
+    no_measurable_cost_evidence_note: noMeasurableCostEvidence
+      ? `${unavailableComponents} cost component(s) carried no billing evidence, so representable spend is unknown rather than zero; supply cost sources (e.g., CI usage records or model-invoice exports) to quantify these headlines — per-component availability is detailed in Data quality below.`
       : null,
   };
 }

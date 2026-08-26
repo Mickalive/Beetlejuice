@@ -29,18 +29,37 @@ function renderClassificationPolicy(cp) {
   return `classification policy: actor allowlist [${actors}] (${cp.bot_actors_source}) · branch prefixes [${prefixes}] (${cp.branch_prefixes_source})`;
 }
 
+/** Headline cell text when no billing evidence exists at all (not a numeric zero). */
+const NO_COST_EVIDENCE_CELL = "no measurable cost evidence supplied";
+
 function renderHeadline(report) {
   const h = report.headline;
   const o = h.outcomes;
+  // LIVE-REPORT-ZERO-DOLLARS repair: with $0 representable spend AND
+  // unavailable cost components, "$0.00" is technically honest but
+  // economically misleading at headline position (it implies a measured
+  // zero-cost audit). Render the disclosure instead; the numeric table stays
+  // intact everywhere else and Data quality below keeps all numbers.
+  const noCostEvidence = h.no_measurable_cost_evidence_supplied === true;
+  const totalMeasuredCell = noCostEvidence
+    ? NO_COST_EVIDENCE_CELL
+    : `**${moneyExact(h.total_measured_cost_micro_usd)}**`;
+  const representableCell = noCostEvidence ? NO_COST_EVIDENCE_CELL : moneyExact(h.representable_total_cost_micro_usd);
   const costPerSuccess =
     h.cost_per_successful_outcome_micro_usd === null
       ? "n/a — no successful outcomes in period"
-      : `**${money(h.cost_per_successful_outcome_display_micro_usd)}** (= ${moneyExact(h.representable_total_cost_micro_usd)} representable spend ÷ ${h.successful_outcomes} accepted; exact value preserved as ${formatMicroUsd(h.cost_per_successful_outcome_micro_usd)})`;
+      : noCostEvidence
+        ? NO_COST_EVIDENCE_CELL
+        : `**${money(h.cost_per_successful_outcome_display_micro_usd)}** (= ${moneyExact(h.representable_total_cost_micro_usd)} representable spend ÷ ${h.successful_outcomes} accepted; exact value preserved as ${formatMicroUsd(h.cost_per_successful_outcome_micro_usd)})`;
   const savingsTrace = h.potential_savings_traceability_finding_ids.join(", ") || "—";
   const sanityNote =
     h.certainly_avoidable_spend_sanity_note === null || h.certainly_avoidable_spend_sanity_note === undefined
       ? ""
       : `\n\nSanity note: ${h.certainly_avoidable_spend_sanity_note}.`;
+  const costEvidenceNote =
+    noCostEvidence && h.no_measurable_cost_evidence_note
+      ? `\n\nCost evidence note: ${h.no_measurable_cost_evidence_note}`
+      : "";
 
   return `## Headline economics (measured unless labeled)
 
@@ -48,17 +67,17 @@ function renderHeadline(report) {
 | --- | --- |
 | Analysis period | ${report.period.from_iso ?? "?"} → ${report.period.to_iso ?? "?"} (UTC) |
 | Agentic tasks analyzed | ${h.agentic_tasks_total} (${o.accepted} accepted · ${o.failed} failed · ${o.aborted} aborted · ${o.unresolved} unresolved) |
-| Total measured cost | **${moneyExact(h.total_measured_cost_micro_usd)}** |
+| Total measured cost | ${totalMeasuredCell} |
 | Estimated-basis cost | ${h.total_estimated_cost_micro_usd === null ? "n/a" : moneyExact(h.total_estimated_cost_micro_usd)} |
 | Unavailable cost components | ${h.cost_components_unavailable} |
-| Representable spend (measured + estimated) | ${moneyExact(h.representable_total_cost_micro_usd)} |
+| Representable spend (measured + estimated) | ${representableCell} |
 | Successful outcomes | **${h.successful_outcomes}** (${h.successful_outcome_definition}) |
 | Cost per successful outcome | ${costPerSuccess} |
 | Certainly avoidable spend | **${moneyExact(h.certainly_avoidable_spend_micro_usd)}** (waste ratio ${h.waste_ratio_percent_of_measured}% of measured spend) |
 | Potential savings (certain only) | **${moneyExact(h.potential_savings_certain_only_micro_usd)}** — traces to findings: ${savingsTrace} |
 
 Speculative savings: ${h.speculative_savings_note}.
-Every savings dollar above resolves to an explicit evidence-backed finding below.${sanityNote}`;
+Every savings dollar above resolves to an explicit evidence-backed finding below.${sanityNote}${costEvidenceNote}`;
 }
 
 function renderBundleEvidence(evidence) {

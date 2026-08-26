@@ -36,6 +36,18 @@ All three modes refuse raw provider payloads with exit code 2 — adapters must
 normalize before this boundary. Reports carry their mode label so synthetic
 demo output can never be mistaken for a real repository audit.
 
+### Zero-evidence headlines
+
+When an audit has **$0 representable spend AND at least one unavailable cost
+component** (e.g. a real repository audited without any billing evidence),
+the headline cells for total measured cost, representable spend and
+cost per successful outcome render as **“no measurable cost evidence supplied”**
+instead of `$0.00` — unknown is not zero. A genuinely measured $0 audit (no
+unavailable components) keeps its numeric `$0.00`. The report JSON always
+keeps exact numbers and exposes the condition as
+`headline.no_measurable_cost_evidence_supplied`; the data-quality section is
+unchanged and remains the numeric source of truth.
+
 Committed e2e coverage for the real modes lives in the repo-root
 `test/integration/` directory (`--github` mode over an in-memory GitHub
 transport; adapter bundle → `--input`; tenant ledger → privacy gate).
