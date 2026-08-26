@@ -1,9 +1,17 @@
 # Proposed CI changes (audit A6/R6 + self-observable CI) — pending `workflows` permission
 
-Status: **STILL PENDING as of cycle 32941279561 close (2026-08-26).** The exact
-commit below was prepared, committed locally (`c5e4e99` on `lab/integration`)
-and pushed this cycle; the remote rejected it again with the same error. The
-branch was reset to `5799144`; the content is preserved here verbatim.
+Status: **STILL PENDING as of cycle 32957437769 close (2026-08-26).** The commit
+was re-attempted from the director close session and rejected again with the
+identical error; it was dropped from the branch and the content below remains
+the exact prepared change. Fresh rejection this cycle:
+
+```
+ ! [remote rejected] HEAD -> lab/integration
+   (refusing to allow a GitHub App to create or update workflow
+    `.github/workflows/ci.yml` without `workflows` permission)
+```
+
+Public API at close: `total_count=0` Actions runs ever on `lab/integration`.
 
 ## Why this cannot land from the factory environment
 

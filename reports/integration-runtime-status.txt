@@ -1,2 +1,50 @@
-integration_test_rc=1
-demo_rc=0
+# Factory cycle 32957437769 — integration close (product_director, 2026-08-26)
+
+Prior state of this file at cycle close attempt (fd9b0db) recorded
+`integration_test_rc=1` while shipping a candidate that contained NONE of the
+cycle's lane work (audit D1/D2). This close lands the dropped lanes, repairs the
+one cross-lane break, and records every step truthfully. All steps below were
+executed this session unless marked "audited".
+
+## Control plane
+- control_plane_diff_rc=0  (AGENTS.md + docs/ identical between origin/main@34ed2c31 and HEAD)
+
+## Lane integration (D1 repair)
+- merge audit   fe1f232 -> b01dbef rc=0
+- merge core    a4e8dfa -> ecb23c2 rc=0
+- merge github  ab157fe -> 0978469 rc=0
+- merge privacy b6fd8d0 -> 1b372e4 rc=0
+- merge product f02563b -> 6c5180b rc=0
+- lanes_integrated=5/5 (all five tips are ancestors of lab/integration; verified via merge-base --is-ancestor)
+
+## Cross-lane repair
+- integration_test_rc_before_repair=1 (audited E8–E10: github lane's workflow-jobs collector hits
+  GET /actions/runs/{id}/jobs, unmocked in apps/cli/test/cross-package-seam.test.js and
+  test/integration/github-real-mode.test.js → 3 UPSTREAM_ERROR 404 failures)
+- repair commit 6423a91: one jobs-route stub line per transport (empty job list; no fabricated evidence)
+
+## Verification on final product head 6423a91
+- npm install --ignore-scripts: exit 0, 0 vulnerabilities
+- npm test: exit 0 — 459 tests / 459 pass / 0 fail / 0 skipped / 0 todo
+- npm run demo x2: exit 0 both, byte-identical (deterministic); economics unchanged:
+  measured $28.57, cost/successful outcome $15.09 ($30.17 ÷ 2, exact $15.085 disclosed),
+  certainly avoidable $8.99 = F-001..F-004 sum, waste ratio 31.47%
+- zero-dollar honesty repair LIVE: `--core-audit` zero-known-cost export renders
+  "no measurable cost evidence supplied" in all three headline cost cells (LIVE-REPORT-ZERO-DOLLARS closed)
+- real mode: missing token → exit 2 GITHUB_TOKEN_MISSING with setup guidance;
+  invalid token → exit 3 GithubAdapterError UPSTREAM_ERROR over REAL network (upstream 401),
+  credential value echoed 0 times in stdout/stderr
+- first_party_test_files=64 >= CI floor 20
+
+## CI guard probe (external blocker re-checked)
+- ci-guard commit (first-party floor 20 + workflow_dispatch trigger) pushed this session:
+  REJECTED — "refusing to allow a GitHub App to create or update workflow
+  `.github/workflows/ci.yml` without `workflows` permission" (2026-08-26).
+  Commit dropped from the branch; content preserved verbatim in reports/ci-guard-proposal.md.
+- public API actions runs on lab/integration: total_count=0 at close — P0 #12 remains open.
+
+## Bottom line
+integration_test_rc=0 on the fully merged candidate; the branch is strictly more
+product-complete than fd9b0db. The only remaining P0 gap (#12) requires one
+external action: grant the factory App the `workflows` permission (or merge/PR
+lab/integration → main from any workflows-capable context). See state/factory.json.
