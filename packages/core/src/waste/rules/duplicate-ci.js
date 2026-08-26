@@ -11,12 +11,13 @@
  * Rule-boundary guards (certainty preconditions — abstain = no finding):
  * - G1: no `equivalence_key` -> never compared. Adapters SHOULD define
  *   `equivalence_key ≡ f(revision, config)`; the core defends the boundary
- *   even when an adapter keys on configuration alone.
+ *   even when an adapter keys on configuration alone (G6).
  * - G2 (repair R3): runs are only compared inside the same `revision_key`
  *   partition. Two runs whose revisions differ are NOT provably identical —
  *   keying equivalence by workflow name alone must never manufacture "certain"
  *   waste. Runs with an absent `revision_key` form their own conservative
- *   partition and are never mixed with revisioned runs.
+ *   partition, are never mixed with revisioned runs, and never produce
+ *   findings at all (G6).
  * - G3: runs that overlap in time are NOT flagged: the agent could not have
  *   known the first result yet — ambiguous evidence is never waste.
  * - G4: missing timing data makes the rule abstain rather than guess.
@@ -30,6 +31,15 @@
  *   observed disagreement poisons certainty for its entire group. It applies
  *   to post-pass repeats that failed/cancelled/timed out AND to earlier
  *   disagreements (e.g. failed -> passed flips on the same keys).
+ * - G6 (repair TRUST-1): a partition whose `revision_key` is UNKNOWN (absent)
+ *   can never produce a certain finding. Without observed revision identity,
+ *   "identical inputs" is unprovable no matter how clean the statuses and
+ *   timings look: an adapter keying equivalence on configuration alone would
+ *   otherwise have cross-revision re-runs charged as duplicates (audit A-N2).
+ *   The documented adapter contract (`equivalence_key ≡ f(revision, config)`)
+ *   is therefore REQUIRED at the boundary: adapters must supply
+ *   `revision_key` for duplicate-CI detection; unknown-revision partitions
+ *   abstain instead of trusting an unverifiable key construction.
  */
 import { formatUsd } from '../../money.js';
 
@@ -54,6 +64,9 @@ export const RULE_DUP_CI = Object.freeze({
     const candidates = [];
     for (const [key, partitions] of groups) {
       for (const [partition, runs] of partitions) {
+        // G6 (TRUST-1): unknown revision identity => "identical inputs" is
+        // unprovable; the partition abstains regardless of statuses/timings.
+        if (partition === null) continue;
         const chronological = [...runs].sort((a, b) => a.seq - b.seq);
         // G5 (repair X1): any non-passed termination in the partition disproves
         // the "identical inputs cannot produce a different decision" premise.
@@ -75,10 +88,10 @@ export const RULE_DUP_CI = Object.freeze({
                 },
               ],
               explanation: (units) =>
-                `CI run "${run.ref}" started ${startIso} re-executed equivalence key "${key}"` +
-                `${partition === null ? '' : ` at unchanged revision "${partition}"`} after run "${keptPass.ref}" had ` +
-                `already finished as passed on identical inputs at ${keptPass.payload.finished_at}. Its result could ` +
-                `not differ, so its measured cost ${formatUsd(units[0].microUsd)} was certainly avoidable.`,
+                `CI run "${run.ref}" started ${startIso} re-executed equivalence key "${key}" at unchanged revision ` +
+                `"${partition}" after run "${keptPass.ref}" had already finished as passed on identical inputs at ` +
+                `${keptPass.payload.finished_at}. Its result could not differ, so its measured cost ` +
+                `${formatUsd(units[0].microUsd)} was certainly avoidable.`,
               recommendation: `Skip CI re-execution for unchanged equivalence key "${key}"; reuse the existing passed result.`,
             });
           }

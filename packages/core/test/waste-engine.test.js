@@ -65,6 +65,7 @@ test('every finding serializes evidence_units with ref/kind/micro_usd/quantified
       status: 'passed',
       cost: cost(100000),
       equivalence_key: 'q::std',
+      revision_key: 'rev-q',
       started_at: '2026-08-01T00:00:00Z',
       finished_at: '2026-08-01T00:02:00Z',
     }),
@@ -73,9 +74,12 @@ test('every finding serializes evidence_units with ref/kind/micro_usd/quantified
       // X1 repair note: this repeat must be `passed` — a non-passed post-pass
       // repeat disproves determinism and the dup-CI rule now abstains for the
       // partition, leaving no finding to exercise this contract with.
+      // TRUST-1 repair note: `revision_key` is present because duplicate-CI
+      // certainty requires observed revision identity.
       status: 'passed',
       cost: cost(150000),
       equivalence_key: 'q::std',
+      revision_key: 'rev-q',
       started_at: '2026-08-01T00:05:00Z',
       finished_at: '2026-08-01T00:07:00Z',
     }),

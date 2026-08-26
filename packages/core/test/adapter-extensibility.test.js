@@ -40,6 +40,10 @@ function mapGitForgeWebhook(webhook) {
           status: webhook.status === 'success' ? 'passed' : 'failed',
           cost: { known: true, micro_usd: webhook.minutes * 8000 },
           equivalence_key: `${webhook.sha}::${webhook.pipeline_def}`,
+          // Adapter contract for duplicate-CI certainty (TRUST-1): duplicate
+          // detection requires observed revision identity, so honest adapters
+          // supply revision_key alongside their equivalence key.
+          revision_key: webhook.sha,
         },
         source: { adapter: 'gitforge' },
       };
