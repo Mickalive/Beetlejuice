@@ -48,8 +48,8 @@ exportCoreAudit()  →  beetlejuice_core_audit_export v1 envelope
 
 | Rule | Charges | Abstains when |
 |------|---------|---------------|
-| `WASTE_DUP_CI_V1` | CI re-runs started after an identical-key pass finished, when every recorded run of that equivalence-key × revision partition passed | no equivalence key; different/unknown `revision_key` partition vs the kept pass; overlapping timings; missing timestamps; ANY non-passed termination inside the partition (repair X1: a post-pass repeat that failed/cancelled/timed out — or any earlier disagreement — empirically disproves "identical inputs cannot differ", so the whole partition is ambiguous) |
-| `WASTE_DET_RETRY_V1` | attempts repeating an equivalence key after its first classified deterministic failure (`auth_error`, `permission_denied`, `invalid_request`, `billing_error`) | any same-key attempt succeeded (premise disproven); no equivalence key; transient/unclassified failures; the first failure itself |
+| `WASTE_DUP_CI_V1` | CI re-runs started after an identical-key pass finished at the SAME observed revision, when every recorded run of that equivalence-key × revision partition passed | no equivalence key; absent `revision_key` (repair TRUST-1/G6: without observed revision identity "identical inputs" is unprovable — adapters must supply it); different revisions; overlapping timings; missing timestamps; ANY non-passed termination inside the partition (repair X1/G5: a post-pass repeat that failed/cancelled/timed out — or any earlier disagreement — empirically disproves "identical inputs cannot differ", so the whole partition is ambiguous) |
+| `WASTE_DET_RETRY_V1` | attempts repeating an equivalence key after its first classified deterministic failure (`auth_error`, `permission_denied`, `invalid_request`, `billing_error`) when every later attempt reproduced that identical failure class | any same-key attempt succeeded (premise disproven); no equivalence key; transient/unclassified failures; the first failure itself; ANY post-premise attempt whose own failure mode disagrees with the established class — a different class (transient or a second "deterministic" one) is observable disproof of "identical inputs fail identically", so the whole group abstains (repair EPI-1/G4) |
 | `WASTE_EXEC_SUPERSEDED_V1` | component costs of an execution explicitly superseded by a strictly later one | no supersession evidence; executions without components |
 
 ## Usage
@@ -76,7 +76,8 @@ const envelope = ledger.exportCoreAudit({ producer: 'my-adapter' });
 npm test          # from packages/core or repo root
 ```
 
-86 deterministic tests cover the event schema, reconstruction, the cost
+90 deterministic tests cover the event schema, reconstruction, the cost
 identity, conservative attribution, tenant isolation, each rule's positive AND
 negative controls (including the X1 determinism-disproof battery for
-duplicate-CI), fixture reproducibility and the export seam contract.
+duplicate-CI and the EPI-1 mode-consistency battery for retries), fixture
+reproducibility and the export seam contract.

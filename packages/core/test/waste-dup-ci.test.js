@@ -59,19 +59,36 @@ test('a revisioned run is never compared against an unrevised one (conservative 
   assert.equal(runWasteAnalysis([task], { rules: [RULE] }).findings.length, 0);
 });
 
-test('two unrevised runs on the same key remain comparable when timings prove repetition', () => {
+// Repair TRUST-1 regression (audit §5 A-N2): two runs with UNKNOWN revision
+// identity used to be charged when timings looked repetitive — an adapter
+// keying equivalence on configuration alone would have had cross-revision
+// re-runs reported as certain duplicates. Without observed revision identity,
+// "identical inputs" is unprovable, so the partition now abstains.
+test('two UNREVISED runs on the same key never produce certain waste (TRUST-1 negative control)', () => {
   const task = taskWithCiRuns([
     { ref: 'CI-N1', status: 'passed', costMicros: 100000, key: 'K1', startedAt: '2026-08-01T00:00:00Z', finishedAt: '2026-08-01T00:05:00Z' },
     { ref: 'CI-N2', status: 'passed', costMicros: 100000, key: 'K1', startedAt: '2026-08-01T00:06:00Z', finishedAt: '2026-08-01T00:09:00Z' },
   ]);
+  const { findings, certainlyAvoidableMicroUsd } = runWasteAnalysis([task], { rules: [RULE] });
+  assert.deepEqual(findings.map((f) => f.evidence_refs).flat(), []);
+  assert.equal(certainlyAvoidableMicroUsd, 0);
+});
+
+test('the same scenario WITH observed revision identity still yields the duplicate finding', () => {
+  // Positive twin of the TRUST-1 control: supplying revision_key is all an
+  // honest adapter needs for the rule to reason again.
+  const task = taskWithCiRuns([
+    { ref: 'CI-RN1', status: 'passed', costMicros: 100000, key: 'K1', revision: 'rev-n', startedAt: '2026-08-01T00:00:00Z', finishedAt: '2026-08-01T00:05:00Z' },
+    { ref: 'CI-RN2', status: 'passed', costMicros: 100000, key: 'K1', revision: 'rev-n', startedAt: '2026-08-01T00:06:00Z', finishedAt: '2026-08-01T00:09:00Z' },
+  ]);
   const { findings } = runWasteAnalysis([task], { rules: [RULE] });
-  assert.deepEqual(findings.map((f) => f.evidence_refs[0]), ['CI-N2']);
+  assert.deepEqual(findings.map((f) => f.evidence_refs[0]), ['CI-RN2']);
 });
 
 test('does NOT flag overlapping re-runs — the agent could not have known the result yet', () => {
   const task = taskWithCiRuns([
-    { ref: 'CI-1', status: 'passed', costMicros: 400000, key: 'K1', startedAt: '2026-08-01T00:00:00Z', finishedAt: '2026-08-01T00:05:00Z' },
-    { ref: 'CI-2', status: 'passed', costMicros: 400000, key: 'K1', startedAt: '2026-08-01T00:03:00Z', finishedAt: '2026-08-01T00:08:00Z' },
+    { ref: 'CI-1', status: 'passed', costMicros: 400000, key: 'K1', revision: 'rev-ov', startedAt: '2026-08-01T00:00:00Z', finishedAt: '2026-08-01T00:05:00Z' },
+    { ref: 'CI-2', status: 'passed', costMicros: 400000, key: 'K1', revision: 'rev-ov', startedAt: '2026-08-01T00:03:00Z', finishedAt: '2026-08-01T00:08:00Z' },
   ]);
   const { findings } = runWasteAnalysis([task], { rules: [RULE] });
   assert.equal(findings.length, 0);
@@ -88,8 +105,8 @@ test('different equivalence keys are never duplicates', () => {
 
 test('missing timestamps or keys make the rule abstain rather than guess', () => {
   const noTimes = taskWithCiRuns([
-    { ref: 'CI-1', status: 'passed', costMicros: 100000, key: 'K1' },
-    { ref: 'CI-2', status: 'passed', costMicros: 100000, key: 'K1' },
+    { ref: 'CI-1', status: 'passed', costMicros: 100000, key: 'K1', revision: 'rev-nt' },
+    { ref: 'CI-2', status: 'passed', costMicros: 100000, key: 'K1', revision: 'rev-nt' },
   ]);
   assert.equal(runWasteAnalysis([noTimes], { rules: [RULE] }).findings.length, 0);
 
@@ -102,9 +119,9 @@ test('missing timestamps or keys make the rule abstain rather than guess', () =>
 
 test('every post-pass repeat on the same key is flagged exactly once each', () => {
   const task = taskWithCiRuns([
-    { ref: 'CI-1', status: 'passed', costMicros: 300000, key: 'K1', startedAt: '2026-08-01T00:00:00Z', finishedAt: '2026-08-01T00:04:00Z' },
-    { ref: 'CI-2', status: 'passed', costMicros: 300000, key: 'K1', startedAt: '2026-08-01T00:05:00Z', finishedAt: '2026-08-01T00:09:00Z' },
-    { ref: 'CI-3', status: 'passed', costMicros: 250000, key: 'K1', startedAt: '2026-08-01T00:10:00Z', finishedAt: '2026-08-01T00:12:00Z' },
+    { ref: 'CI-1', status: 'passed', costMicros: 300000, key: 'K1', revision: 'rev-mr', startedAt: '2026-08-01T00:00:00Z', finishedAt: '2026-08-01T00:04:00Z' },
+    { ref: 'CI-2', status: 'passed', costMicros: 300000, key: 'K1', revision: 'rev-mr', startedAt: '2026-08-01T00:05:00Z', finishedAt: '2026-08-01T00:09:00Z' },
+    { ref: 'CI-3', status: 'passed', costMicros: 250000, key: 'K1', revision: 'rev-mr', startedAt: '2026-08-01T00:10:00Z', finishedAt: '2026-08-01T00:12:00Z' },
   ]);
   const { findings, certainlyAvoidableMicroUsd } = runWasteAnalysis([task], { rules: [RULE] });
   assert.deepEqual(findings.map((f) => f.evidence_refs[0]), ['CI-2', 'CI-3']);

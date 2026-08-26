@@ -22,11 +22,11 @@ function taskWithAttempts(attempts) {
 
 const RULE = RULE_DET_RETRY;
 
-test('blind repeats after a deterministic failure are certainly avoidable; the first failure is not', () => {
+test('same-class blind repeats after a deterministic failure are certainly avoidable; the first failure is not', () => {
   const task = taskWithAttempts([
     { ref: 'M1', status: 'error', failureClass: 'auth_error', costMicros: 900000, key: 'A1' },
     { ref: 'M2', status: 'error', failureClass: 'auth_error', costMicros: 900000, key: 'A1' },
-    { ref: 'M3', status: 'error', failureClass: 'billing_error', costMicros: 900000, key: 'A1' },
+    { ref: 'M3', status: 'error', failureClass: 'auth_error', costMicros: 900000, key: 'A1' },
   ]);
   const { findings, certainlyAvoidableMicroUsd } = runWasteAnalysis([task], { rules: [RULE] });
   assert.deepEqual(findings.map((f) => f.evidence_refs[0]), ['M2', 'M3']);
@@ -67,16 +67,60 @@ test('a success BEFORE the deterministic failure still disqualifies the group', 
   assert.equal(findings.length, 0);
 });
 
-test('attempts after the first deterministic failure are charged even when their own class differs', () => {
+// Repair EPI-1 regression (audit §5/E6-D1): a post-premise retry failing with
+// a DIFFERENT failure class used to be charged anyway. Its own transient class
+// is direct evidence that identical inputs do NOT reproduce identically under
+// this key — the same epistemics that poisons duplicate-CI partitions (X1/G5).
+test('a post-premise retry whose failure MODE disagrees poisons the whole group (EPI-1 negative control)', () => {
   const task = taskWithAttempts([
     { ref: 'M1', status: 'error', failureClass: 'auth_error', costMicros: 500000, key: 'A2' },
     { ref: 'M2', status: 'error', failureClass: 'network_timeout', costMicros: 500000, key: 'A2' },
     { ref: 'M3', status: 'error', failureClass: 'auth_error', costMicros: 500000, key: 'A2' },
   ]);
+  const { findings, certainlyAvoidableMicroUsd } = runWasteAnalysis([task], { rules: [RULE] });
+  // M2's transient failure disproves "identical inputs fail identically":
+  // either the equivalence key is untrustworthy or the premise is wrong.
+  // Under either reading no unit in this group stays certainly chargeable —
+  // not even M3, which reproduced the established class.
+  assert.deepEqual(findings.map((f) => f.evidence_refs).flat(), []);
+  assert.equal(certainlyAvoidableMicroUsd, 0);
+});
+
+test('a second DETERMINISTIC class after the premise also poisons the group (mode disagreement)', () => {
+  // Two distinct "deterministic" classes on one attempt key are mutually
+  // contradictory evidence: deterministic failures reproduce identically.
+  const task = taskWithAttempts([
+    { ref: 'M1', status: 'error', failureClass: 'auth_error', costMicros: 900000, key: 'A1' },
+    { ref: 'M2', status: 'error', failureClass: 'auth_error', costMicros: 900000, key: 'A1' },
+    { ref: 'M3', status: 'error', failureClass: 'billing_error', costMicros: 900000, key: 'A1' },
+  ]);
+  const { findings, certainlyAvoidableMicroUsd } = runWasteAnalysis([task], { rules: [RULE] });
+  assert.deepEqual(findings.map((f) => f.evidence_refs).flat(), []);
+  assert.equal(certainlyAvoidableMicroUsd, 0);
+});
+
+test('transient failures BEFORE the determinism premise never poison later same-class repeats', () => {
+  const task = taskWithAttempts([
+    { ref: 'M1', status: 'error', failureClass: 'network_timeout', costMicros: 500000, key: 'A3' },
+    { ref: 'M2', status: 'error', failureClass: 'auth_error', costMicros: 500000, key: 'A3' },
+    { ref: 'M3', status: 'error', failureClass: 'auth_error', costMicros: 500000, key: 'A3' },
+  ]);
+  const { findings, certainlyAvoidableMicroUsd } = runWasteAnalysis([task], { rules: [RULE] });
+  // The premise starts at M2 (first classified deterministic failure); M3
+  // reproduced it identically and is the only blind repeat.
+  assert.deepEqual(findings.map((f) => f.evidence_refs[0]), ['M3']);
+  assert.equal(certainlyAvoidableMicroUsd, 500000);
+});
+
+test('a post-premise error without an observable class fails closed (ambiguity => abstain)', () => {
+  const task = taskWithAttempts([
+    { ref: 'M1', status: 'error', failureClass: 'invalid_request', costMicros: 400000, key: 'A4' },
+    { ref: 'M2', status: 'error', failureClass: undefined, costMicros: 400000, key: 'A4' },
+  ]);
+  // The event schema normally forbids this shape (failed invocations require
+  // failure_class); the rule still defends the boundary when reached directly.
   const { findings } = runWasteAnalysis([task], { rules: [RULE] });
-  // M1 = information. M2 and M3 repeated identical inputs after a
-  // deterministic failure — both provably could not succeed.
-  assert.deepEqual(findings.map((f) => f.evidence_refs[0]), ['M2', 'M3']);
+  assert.equal(findings.length, 0);
 });
 
 test('transient failures never produce certain-waste findings', () => {
@@ -104,9 +148,11 @@ test('a retry under a NEW equivalence key is a fresh attempt, not certain waste'
 });
 
 test('unquantified retries are reported as unquantified evidence, never guessed into dollars', () => {
+  // Same deterministic class throughout (EPI-1): an unknown-cost repeat that
+  // still reproduces the established class stays chargeable as unquantified.
   const task = taskWithAttempts([
     { ref: 'M1', status: 'error', failureClass: 'billing_error', costMicros: 123, key: 'E1' },
-    { ref: 'M2', status: 'error', failureClass: 'network_timeout', costKnown: false, key: 'E1' },
+    { ref: 'M2', status: 'error', failureClass: 'billing_error', costKnown: false, key: 'E1' },
   ]);
   const { findings, certainlyAvoidableMicroUsd } = runWasteAnalysis([task], { rules: [RULE] });
   assert.equal(findings.length, 1);
