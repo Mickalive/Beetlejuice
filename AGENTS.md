@@ -123,6 +123,29 @@ A distinct, explicitly versioned `AGENTIC_DYNAMICS_EXPORT` may later export abst
 - Prefer the simplest executable V1 when future complexity conflicts with delivery speed.
 - Tests are part of the product, especially privacy, re-identification resistance, tenant isolation, architecture reconstruction, cost accounting, outcome attribution and schema extensibility.
 
+## Autonomous factory liveness
+The repository must keep advancing without a human while useful repo-local work exists.
+
+- Ox is the only autonomous coding/reasoning model. Provider failures, rate limits and stalls trigger Ox retries or a fresh Ox-only cycle, never silent substitution with another model.
+- A failed lane, failed test, failed integration, provider outage, `BLOCKED_EXTERNAL`, or accidental `continue=false` is not a terminal condition while another repo-local repair, experiment, fixture, corpus slice, test, refactor or diagnostic can advance a declared gate.
+- `lab/integration` is the durable cumulative product/progress state. Main owns binding policy/control-plane instructions. Never erase newer verified integration progress with an older main state.
+- A workflow that is stuck must be killed and relaunched from durable state. A workflow that finishes red must still leave any safe snapshots/evidence available to integration and the next cycle.
+- `COMPLETE` is evidence-gated, not an LLM opinion. It is terminal only when all declared machine-checkable gates are green and `terminal_ready=true` is explicitly justified by the roadmap/evidence.
+- Human intervention may pause autonomy only when `requires_user_action=true` AND `repo_local_work_exhausted=true`; before setting those flags, exhaust every safe repo-local route.
+
+### Anti-spin rule
+Autonomy means progress, not infinite repetition. If a cycle fails to create a durable capability/evidence/state delta, the next attempt must not merely repeat the same approach.
+
+Escalate in this order as appropriate:
+1. isolate the smallest failing gate and reproduce it deterministically;
+2. repair tests, fixtures, dependency/workspace plumbing or the control-plane if they are the blocker;
+3. split the task into a smaller owned-path change or executable experiment;
+4. change the evidence source/corpus slice while preserving the same falsifiable criterion;
+5. downgrade unsupported claims to unknown/abstain and advance another independent gate;
+6. only after all repo-local routes are demonstrably exhausted may the factory request human/external action.
+
+Never spend successive cycles producing only prose summaries of the same blocker. Every autonomous cycle should seek a durable code, test, corpus, report, evidence or state improvement.
+
 ## Definition of product, not architecture theater
 Every branch/PR/agent must move at least one user-visible or testable capability toward a functioning GitHub-installed product. Do not build a giant platform, generic LLM FinOps dashboard, GitHub replacement, day-one orchestrator, sensitive data lake, or a system that requires millions of runs before producing value.
 
