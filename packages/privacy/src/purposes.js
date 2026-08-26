@@ -25,6 +25,10 @@ export const CONSENT_PURPOSES = Object.freeze([
  *
  * - `minimumCohort`: floor for the rare-combination suppression threshold.
  *   Callers may raise the threshold but never lower it below this floor.
+ * - `maximumEpsilon`: CEILING for differential-privacy noise requests on
+ *   published aggregate statistics. Lower epsilon = more noise = stronger
+ *   protection, so callers may lower epsilon freely but never exceed this
+ *   ceiling — the exact inverse of the cohort floor.
  * - `requiresLicenseAcknowledgement`: the external research / data-licensing
  *   surface may only be used when the caller explicitly acknowledges that a
  *   licensing right exists for this data (installation alone never grants it).
@@ -32,14 +36,17 @@ export const CONSENT_PURPOSES = Object.freeze([
 export const PURPOSE_POLICIES = Object.freeze({
   [PRODUCT_TELEMETRY]: Object.freeze({
     minimumCohort: 5,
+    maximumEpsilon: 5,
     requiresLicenseAcknowledgement: false,
   }),
   [GLOBAL_BENCHMARK_CONTRIBUTION]: Object.freeze({
     minimumCohort: 5,
+    maximumEpsilon: 2,
     requiresLicenseAcknowledgement: false,
   }),
   [EXTERNAL_RESEARCH_DATA_LICENSING]: Object.freeze({
     minimumCohort: 25,
+    maximumEpsilon: 1,
     requiresLicenseAcknowledgement: true,
   }),
 });
@@ -49,3 +56,10 @@ export const PURPOSE_POLICIES = Object.freeze({
  * records, which is never acceptable for a global dataset.
  */
 export const ABSOLUTE_MINIMUM_COHORT = 2;
+
+/**
+ * Absolute highest epsilon any purpose allows. Epsilon above this would make
+ * per-record influence effectively unbounded; there is no request shape that
+ * can negotiate past it.
+ */
+export const ABSOLUTE_MAXIMUM_EPSILON = 5;
