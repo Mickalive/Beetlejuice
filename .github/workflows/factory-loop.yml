@@ -49,11 +49,21 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Start cycle lane from latest integrated candidate
+      - name: Start product lane with binding main control plane
         shell: bash
         run: |
           set -euo pipefail
           git fetch origin main
+
+          CONTROL=/tmp/beetlejuice-control-plane
+          rm -rf "$CONTROL"
+          mkdir -p "$CONTROL"
+          for path in .github/scripts .opencode AGENTS.md docs; do
+            if git cat-file -e "origin/main:${path}" 2>/dev/null; then
+              git archive --format=tar origin/main "$path" | tar -xf - -C "$CONTROL"
+            fi
+          done
+
           if git ls-remote --exit-code --heads origin refs/heads/lab/integration >/dev/null 2>&1; then
             git fetch origin lab/integration:refs/remotes/origin/lab/integration
             BASE=origin/lab/integration
@@ -63,6 +73,8 @@ jobs:
           BASE_SHA=$(git rev-parse "$BASE")
           BRANCH="cycle/${GITHUB_RUN_ID}/${{ matrix.lane }}"
           git switch -C "$BRANCH" "$BASE_SHA"
+          cp -a "$CONTROL/." .
+
           echo "BEETLEJUICE_CYCLE_BRANCH=$BRANCH" >> "$GITHUB_ENV"
           echo "BEETLEJUICE_CYCLE_BASE_SHA=$BASE_SHA" >> "$GITHUB_ENV"
 
@@ -76,7 +88,7 @@ jobs:
           bash .github/scripts/run-opencode-with-retry.sh run \
             --model "$BEETLEJUICE_MODEL" \
             --agent "${{ matrix.agent }}" \
-            "${{ matrix.mission }} Work only on the already-checked-out cycle branch from the immutable integration base. Read the binding Beetlejuice control plane first. Produce durable tested product progress inside your owned path ${{ matrix.owned_path }}. Do NOT git fetch, pull, merge, rebase, cherry-pick, switch, checkout or reset to another ref. Do NOT modify .github/**, docs/**, AGENTS.md or state/**. Inspect state/factory.json only as read-only context; do not declare global product completion. Never put credential-shaped literal fixtures (Slack/GitHub/AWS/API tokens or similar) in source or tests; construct fake sensitive values from harmless fragments at runtime. If the obvious task is already implemented, find the next missing acceptance criterion in your workcard and advance it."
+            "${{ matrix.mission }} Work only on the already-checked-out cycle branch from the immutable integration product base. The binding control plane (.opencode, AGENTS.md, docs and runtime scripts) has been overlaid from current main and outranks stale copies from the product branch. Produce durable tested product progress inside your owned path ${{ matrix.owned_path }}. Do NOT git fetch, pull, merge, rebase, cherry-pick, switch, checkout or reset to another ref. Do NOT modify .github/**, docs/**, AGENTS.md or state/**. Inspect state/factory.json only as read-only context; do not declare global product completion. Never put credential-shaped literal fixtures (Slack/GitHub/AWS/API tokens or similar) in source or tests; construct fake sensitive values from harmless fragments at runtime. If the obvious task is already implemented, find the next missing acceptance criterion in your workcard and advance it."
 
       - name: Repair credential-shaped fixtures before persistence
         if: always()
@@ -194,17 +206,28 @@ jobs:
           pattern: beetlejuice-lane-*-${{ github.run_id }}
           path: /tmp/beetlejuice_lane_artifacts
 
-      - name: Checkout persistent integration candidate and mount lane snapshots
+      - name: Checkout product candidate with binding main control plane and mount lanes
         shell: bash
         run: |
           set -euo pipefail
           git fetch origin main
+
+          CONTROL=/tmp/beetlejuice-control-plane
+          rm -rf "$CONTROL"
+          mkdir -p "$CONTROL"
+          for path in .github/scripts .opencode AGENTS.md docs; do
+            if git cat-file -e "origin/main:${path}" 2>/dev/null; then
+              git archive --format=tar origin/main "$path" | tar -xf - -C "$CONTROL"
+            fi
+          done
+
           if git ls-remote --exit-code --heads origin refs/heads/lab/integration >/dev/null 2>&1; then
             git fetch origin lab/integration:refs/remotes/origin/lab/integration
             git switch -C lab/integration origin/lab/integration
           else
             git switch -C lab/integration origin/main
           fi
+          cp -a "$CONTROL/." .
 
           for lane in core github privacy product; do
             REMOTE="cycle/${GITHUB_RUN_ID}/${lane}"
@@ -234,7 +257,7 @@ jobs:
           bash .github/scripts/run-opencode-with-retry.sh run \
             --model "$BEETLEJUICE_MODEL" \
             --agent integration_director \
-            "Integrate Factory cycle ${GITHUB_RUN_ID}. Lane snapshots are mounted at /tmp/beetlejuice_core, /tmp/beetlejuice_github, /tmp/beetlejuice_privacy and /tmp/beetlejuice_product. Compare them to the current persistent integration candidate. Bring in all useful non-conflicting product progress, repair interfaces/root config/tests as needed, run the complete test path and synthetic demo when available, and update state/factory.json from verified evidence. Do not merely summarize lane work: leave one runnable integrated product candidate."
+            "Integrate Factory cycle ${GITHUB_RUN_ID}. Lane snapshots are mounted at /tmp/beetlejuice_core, /tmp/beetlejuice_github, /tmp/beetlejuice_privacy and /tmp/beetlejuice_product. The current main control plane is overlaid for instructions only; do not treat it as product progress. Compare lane product outputs to the current persistent integration candidate. Bring in all useful non-conflicting product progress, repair interfaces/root config/tests as needed, run the complete test path and synthetic demo when available, and update state/factory.json from verified evidence. Do not merely summarize lane work: leave one runnable integrated product candidate."
 
       - name: Verify integrated candidate
         if: always()
@@ -254,7 +277,7 @@ jobs:
           fi
           exit 0
 
-      - name: Persist integration branch
+      - name: Persist integration branch without control-plane overlay
         if: always()
         shell: bash
         run: |
@@ -262,7 +285,11 @@ jobs:
           mkdir -p reports state
           git config user.name "beetlejuice-integration-director"
           git config user.email "beetlejuice-integration@autonomous.local"
-          git add -A
+          git add -A -- . \
+            ':(exclude).github/scripts/**' \
+            ':(exclude).opencode/**' \
+            ':(exclude)AGENTS.md' \
+            ':(exclude)docs/**'
           git commit -m "Factory ${GITHUB_RUN_ID}: integrate product candidate" || true
           git push origin HEAD:refs/heads/lab/integration
 
@@ -277,12 +304,22 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Mount integration candidate
+      - name: Mount integration candidate with binding main control plane
         shell: bash
         run: |
           set -euo pipefail
+          git fetch origin main
+          CONTROL=/tmp/beetlejuice-control-plane
+          rm -rf "$CONTROL"
+          mkdir -p "$CONTROL"
+          for path in .github/scripts .opencode AGENTS.md docs; do
+            if git cat-file -e "origin/main:${path}" 2>/dev/null; then
+              git archive --format=tar origin/main "$path" | tar -xf - -C "$CONTROL"
+            fi
+          done
           git fetch origin lab/integration:refs/remotes/origin/lab/integration
           git switch -C "cycle/${GITHUB_RUN_ID}/audit" origin/lab/integration
+          cp -a "$CONTROL/." .
 
       - name: Install OpenCode
         shell: bash
@@ -294,7 +331,7 @@ jobs:
           bash .github/scripts/run-opencode-with-retry.sh run \
             --model "$BEETLEJUICE_MODEL" \
             --agent product_auditor \
-            "Adversarially audit the integrated Beetlejuice candidate from Factory cycle ${GITHUB_RUN_ID}. Run the product and tests. Falsify P0, privacy, economic attribution and certain-waste claims wherever possible. Write reports/latest-product-audit.md with exact PASS/FAIL evidence and smallest repairs."
+            "Adversarially audit the integrated Beetlejuice candidate from Factory cycle ${GITHUB_RUN_ID}. Use the binding main control plane for instructions only. Run the product and tests. Falsify P0, privacy, economic attribution and certain-waste claims wherever possible. Write reports/latest-product-audit.md with exact PASS/FAIL evidence and smallest repairs."
 
       - name: Persist audit snapshot
         if: always()
@@ -318,12 +355,22 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Checkout integration and mount audit
+      - name: Checkout integration with binding main control plane and mount audit
         shell: bash
         run: |
           set -euo pipefail
+          git fetch origin main
+          CONTROL=/tmp/beetlejuice-control-plane
+          rm -rf "$CONTROL"
+          mkdir -p "$CONTROL"
+          for path in .github/scripts .opencode AGENTS.md docs; do
+            if git cat-file -e "origin/main:${path}" 2>/dev/null; then
+              git archive --format=tar origin/main "$path" | tar -xf - -C "$CONTROL"
+            fi
+          done
           git fetch origin lab/integration:refs/remotes/origin/lab/integration
           git switch -C lab/integration origin/lab/integration
+          cp -a "$CONTROL/." .
           AUDIT="cycle/${GITHUB_RUN_ID}/audit"
           if git ls-remote --exit-code --heads origin "refs/heads/$AUDIT" >/dev/null 2>&1; then
             git fetch origin "$AUDIT:refs/remotes/origin/$AUDIT"
@@ -340,7 +387,7 @@ jobs:
           bash .github/scripts/run-opencode-with-retry.sh run \
             --model "$BEETLEJUICE_MODEL" \
             --agent product_director \
-            "Close Factory cycle ${GITHUB_RUN_ID}. Re-run targeted verification where useful, read the latest audit if present, then update state/factory.json truthfully. If any P0 gap remains that can be fixed in-repo, continue=true and next_action must name the concrete highest-value gap. Never stop because this cycle had a failed lane/test/network call."
+            "Close Factory cycle ${GITHUB_RUN_ID}. Use the binding current-main control plane for instructions only. Re-run targeted verification where useful, read the latest audit if present, then update state/factory.json truthfully. If any P0 gap remains that can be fixed in-repo, continue=true and next_action must name the concrete highest-value gap. Never stop because this cycle had a failed lane/test/network call."
 
       - name: Validate and persist factory state
         if: always()
@@ -357,6 +404,6 @@ jobs:
           mv "$TMP" state/factory.json
           git config user.name "beetlejuice-product-director"
           git config user.email "beetlejuice-director@autonomous.local"
-          git add -A
+          git add state reports || true
           git commit -m "Factory ${GITHUB_RUN_ID}: product direction" || true
           git push origin HEAD:refs/heads/lab/integration
