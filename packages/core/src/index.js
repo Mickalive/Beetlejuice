@@ -29,6 +29,8 @@ export { MICROS_PER_USD, usd, formatUsd } from './money.js';
 export { reconstructTasks } from './task.js';
 export {
   COST_KINDS,
+  COST_EVIDENCE_STATES,
+  costEvidenceState,
   emptyRollup,
   rollupTaskCost,
   verifyCostAccounting,
@@ -44,4 +46,5 @@ export { DEFAULT_WASTE_RULES } from './waste/rules/index.js';
 export { RULE_DUP_CI } from './waste/rules/duplicate-ci.js';
 export { RULE_DET_RETRY } from './waste/rules/deterministic-retry.js';
 export { RULE_EXEC_SUPERSEDED } from './waste/rules/superseded-execution.js';
+export { RULE_EXEC_AFTER_ABORT } from './waste/rules/execution-after-abort.js';
 export { TenantLedger } from './analytics/tenant.js';

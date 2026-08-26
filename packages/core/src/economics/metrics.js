@@ -8,7 +8,7 @@
  * measured cost by accepted outcomes — the honest economics view, including
  * the cost of failed/aborted/unresolved work.
  */
-import { verifyCostAccounting } from './cost.js';
+import { verifyCostAccounting, costEvidenceState } from './cost.js';
 
 function round6(x) {
   return Math.round(x * 1e6) / 1e6;
@@ -63,7 +63,12 @@ export function computeSummary({ tasks, waste, eventCount }) {
       currency: 'USD',
       unit: 'micro_usd',
       knownMicroUsd: known,
+      totalComponents: accounting.totalComponents,
       unknownComponentCount: unknownComponents,
+      // Canonical zero-cost honesty predicate (audit LIVE-REPORT-ZERO-DOLLARS):
+      // when this is 'unmeasured' or 'none_observed', report surfaces must NOT
+      // render the headline as "$0.00" — no measurable cost evidence exists.
+      evidenceState: costEvidenceState(accounting),
       byKindMicroUsd: { ...accounting.byKindMicroUsd },
       costPerAcceptedOutcomeMicroUsd:
         totals.accepted > 0 ? Math.round(known / totals.accepted) : null,
