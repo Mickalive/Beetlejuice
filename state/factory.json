@@ -1,9 +1,9 @@
 {
   "schema_version": "1",
-  "status": "BLOCKED_EXTERNAL",
+  "status": "P0_READY",
   "continue": true,
-  "next_action": "CLOSE_P0_ITEM_12_VIA_ONE_EXTERNAL_TOGGLE_THEN_SCRIPTED_SELF_VERIFICATION: after this close the ONLY open P0 gap is #12 (CI green observed on the integration candidate) and every remaining path to an observed run requires one external decision - freshly re-proven this session: push of the prepared ci.yml commit was rejected ('refusing to allow a GitHub App to create or update workflow .github/workflows/ci.yml without workflows permission') and public API still shows total_count=0 Actions runs ever on lab/integration. SMALLEST USER ACTION: grant the factory App the `workflows` permission (one repository/App setting; no token, no code review). ZERO-DECISION SEQUENCE AFTER THE TOGGLE: (1) re-land the ci-guard commit preserved verbatim in reports/ci-guard-proposal.md on lab/integration (first-party test floor 20 + workflow_dispatch trigger); (2) push it (now permitted; its own push may fire CI via the existing push trigger); (3) POST /repos/Mickalive/Beetlejuice/actions/workflows/ci.yml/dispatches {ref:'lab/integration'} (prior cycle proved the credential reaches this endpoint: HTTP 422 trigger-specific error, not 401/403); (4) poll the Actions API and flip integration_ci_green ONLY on an observed successful conclusion; (5) set status P0_READY per the stop rule. Equivalent alternative single action: merge lab/integration -> main from any workflows-capable/user context (fires push-to-main CI AND repairs the docs-only red default branch at once), or open that PR from any user-token context (pull_request trigger needs no workflows permission). No in-repo P0 work remains: the D1 lane-drop was repaired this close and LIVE-REPORT-ZERO-DOLLARS is closed on the candidate.",
-  "blocking_reason": "P0 #12 (observed green CI run on the product tree) cannot be produced from inside the repository: the factory credential can push product code but GitHub rejects any commit touching .github/workflows/* without the `workflows` permission, token-triggered push events do not create runs (anti-recursion), and workflow_dispatch/repository_dispatch are the documented exceptions - which require that same permission to land first. Re-verified 2026-08-26T12:xxZ by attempting the exact prepared commit; rejection reproduced verbatim. All independent work is complete: candidate lab/integration@8ca00af contains 5/5 cycle lanes plus cross-lane repairs, 459/459 tests, deterministic demo, live honesty repair.",
+  "next_action": "IMPLEMENT_P1_INSTALLABLE_GITHUB_APP_PROTOTYPE",
+  "blocking_reason": null,
   "p0_checks": {
     "canonical_agentic_task": true,
     "github_fixture_ingestion": true,
@@ -16,88 +16,33 @@
     "privacy_safe_global_export": true,
     "critical_tests": true,
     "quickstart_docs": true,
-    "integration_ci_green": false
+    "integration_ci_green": true
   },
-  "last_verified_commit": "6d56b1b00eaa770d34f1212ea1ff4c0c4f664f04",
+  "last_verified_commit": "47237b4d57ebc338e43a0dfeb9db45c95a1767c6",
   "cycle": 32957437769,
   "evidence": {
-    "closed_cycle": 32957437769,
-    "verified_at_utc": "2026-08-26T12:27:00Z",
-    "verified_by": "product_director",
-    "integrated_candidate": "origin/lab/integration@8ca00af = prior head fd9b0db + audit lane fe1f232 + core a4e8dfa + github ab157fe + privacy b6fd8d0 + product f02563b (all merged --no-ff, zero conflicts) + jobs-route fixture repair 6423a91 + bookkeeping 8ca00af. Every executed check below ran on product head 6423a91; docs-only commits 8ca00af sit above it and touch only reports/ and state/.",
-    "lane_merges": [
-      "fe1f232 audit lane -> b01dbef (D1/D2 verdict integrated)",
-      "a4e8dfa core lane (+704 lines: WASTE_EXECUTION_AFTER_ABORT rule, cost-evidence-state suite) -> ecb23c2",
-      "ab157fe github lane (+1235 lines: data-minimizing workflow-jobs collector, cost-source adapters) -> 0978469",
-      "b6fd8d0 privacy lane (+725 lines: no-echo + contribution-cap batteries) -> 1b372e4",
-      "f02563b product lane (+229 lines: zero-dollar-headline honesty repair) -> 6c5180b",
-      "all five tips verified ancestors of lab/integration via merge-base --is-ancestor"
-    ],
-    "corrections_to_prior_state": [
-      "Audit D1 CONFIRMED and REPAIRED: fd9b0db shipped none of this cycle's lane work (product tree byte-identical to prior verified head 5799144; all four lane merge-bases = 980b223). This close landed every dropped lane; the candidate is now strictly more product-complete.",
-      "Audit D2 repaired: reports/integration-runtime-status.txt rewritten truthfully per-step; the unexplained integration_test_rc=1 line is replaced by a full account (pre-repair rc=1 with root cause, post-repair rc=0).",
-      "Prior next_action superseded: LIVE-REPORT-ZERO-DOLLARS (last named in-repo finding) is closed on the candidate - zero-known-cost canonical-core export renders 'no measurable cost evidence supplied' through the real CLI surface.",
-      "Status changed BUILDING -> BLOCKED_EXTERNAL because the precondition for BLOCKED_EXTERNAL now genuinely holds: all independent work is complete and the sole remaining validation requires an external permission decision."
-    ],
-    "executed_checks": [
-      {
-        "command": "git fetch origin; git diff origin/main..HEAD -- AGENTS.md docs/",
-        "result": "empty - control plane identical between binding main and candidate; instructions current"
-      },
-      {
-        "command": "git ls-remote origin refs/heads/lab/integration; git rev-parse HEAD",
-        "result": "both fd9b0db at session start - audited candidate identity confirmed before acting on it"
-      },
-      {
-        "command": "for each cycle lane: git merge-base --is-ancestor <tip> HEAD (pre-repair)",
-        "result": "NO for core/github/privacy/product, merge-base 980b223 for all - audit D1 lane-drop independently reproduced before repair"
-      },
-      {
-        "command": "git merge --no-ff x5 (audit, core, github, privacy, product)",
-        "result": "five clean merges, zero conflicts"
-      },
-      {
-        "command": "edit apps/cli/test/cross-package-seam.test.js + test/integration/github-real-mode.test.js (jobs-route stub per transport)",
-        "result": "the single cross-lane break (audited E8-E10: 3x UPSTREAM_ERROR 404 on GET /actions/runs/5100/jobs) repaired with two one-line empty-job-list stubs; no evidence fabricated"
-      },
-      {
-        "command": "npm install --ignore-scripts && npm test (on HEAD 6423a91)",
-        "result": "install exit 0, 0 vulnerabilities; # tests 459 / # pass 459 / # fail 0 / # skipped 0 / # todo 0"
-      },
-      {
-        "command": "npm run demo x2 + diff (on merged tree)",
-        "result": "exit 0 both, byte-identical; economics unchanged: measured $28.57, cost/successful outcome $15.09 (= $30.17 / 2 accepted, exact $15.085 disclosed), certainly avoidable $8.99 (= F-001..F-004 sum), waste ratio 31.47%"
-      },
-      {
-        "command": "node apps/cli/src/demo.js --core-audit <zero-known-cost export>",
-        "result": "exit 0; headline renders 'no measurable cost evidence supplied' in all three cost cells with Unavailable cost components=3 - LIVE-REPORT-ZERO-DOLLARS closed end-to-end (also covered by committed tests report.test.js:63/99/119/144)"
-      },
-      {
-        "command": "env -u BEETLEJUICE_GITHUB_TOKEN node apps/cli/src/demo.js --github acme/widget",
-        "result": "exit 2 GITHUB_TOKEN_MISSING with setup guidance; no fabricated audit"
-      },
-      {
-        "command": "BEETLEJUICE_GITHUB_TOKEN=<invalid> node apps/cli/src/demo.js --github octocat/Hello-World",
-        "result": "exit 3 GithubAdapterError UPSTREAM_ERROR over REAL network (upstream 401 for GET /repos/octocat/Hello-World/pulls); credential value appears 0 times in stdout+stderr"
-      },
-      {
-        "command": "first-party guard expression (prune node_modules/.opencode/.github/.git)",
-        "result": "64 first-party test files >= 20 CI floor -> pass"
-      },
-      {
-        "command": "commit ci-guard change (.github/workflows/ci.yml: first-party floor 20 + workflow_dispatch) and push",
-        "result": "REJECTED 2026-08-26: 'refusing to allow a GitHub App to create or update workflow .github/workflows/ci.yml without workflows permission' - external blocker re-proven fresh this session; ci-guard commit dropped from branch (reset to 6423a91), content preserved verbatim in reports/ci-guard-proposal.md"
-      },
-      {
-        "command": "curl public API actions/runs?branch=lab%2Fintegration",
-        "result": "total_count=0 at close - no remote run has ever observed the candidate; integration_ci_green stays false on honest bookkeeping"
-      },
-      {
-        "command": "git push origin HEAD:lab/integration (lanes + repair + truthful bookkeeping)",
-        "result": "accepted: fd9b0db..8ca00af - remote candidate now equals local verified tree"
-      }
-    ],
-    "p0_check_rationale": "Checks 1-11 kept true are re-backed on the NEW product head 6423a91 this session: 459/459 tests include the privacy/re-identification batteries (60-probe adversarial battery held per audit §5 on this tree), tenant isolation, cost identity, outcome attribution, schema compatibility, the new WASTE_EXECUTION_AFTER_ABORT rule suite, no-echo and contribution-cap privacy batteries, and the zero-dollar disclosure tests; demo remains deterministic with exact economics; real-mode honesty re-reproduced live (exit 2 refusal; exit 3 typed upstream 401 with zero credential echo); first-party suite 64 >= CI floor 20. The adversarial audit for this cycle independently confirmed the same claims on the pre-repair tree (11/12 PASS, zero product defects beyond items repaired here). integration_ci_green remains false: zero Actions runs have ever observed any ref carrying the product (public API total_count=0), and local execution of every CI step does not substitute for the criterion.",
-    "external_blocker_assessment": "BLOCKED_EXTERNAL is now honest and precise: after repairing D1/D2/D4 in-repo, the ONLY remaining P0 validation (#12) requires an external permission decision, freshly proven by a rejected workflow-file push minutes before this write. continue stays true: the moment the `workflows` permission is granted, next cycle executes the scripted zero-decision sequence in next_action (land preserved ci-guard commit, dispatch, observe, flip integration_ci_green on an observed success, set P0_READY). Smallest user action, verbatim: grant the factory GitHub App the `workflows` repository permission - or equivalently merge/open-PR lab/integration -> main from any workflows-capable or user-token context."
+    "p0_verified_at_utc": "2026-08-26T12:51:00Z",
+    "p0_ci_run_id": 32970824140,
+    "p0_ci_workflow": "BEETLEJUICE Product CI",
+    "p0_ci_event": "pull_request",
+    "p0_ci_head": "47237b4d57ebc338e43a0dfeb9db45c95a1767c6",
+    "p0_ci_conclusion": "success",
+    "p0_pull_request": 1,
+    "local_verification": "459 tests / 459 pass / 0 fail / 0 skipped; deterministic synthetic demo; real-mode error handling and credential redaction verified",
+    "integration_report": "reports/integration-runtime-status.txt",
+    "adversarial_audit": "reports/latest-product-audit.md",
+    "previous_external_blocker": "Resolved by opening PR #1 from lab/integration to main, which triggered the existing pull_request Product CI without requiring the factory App to edit workflow files."
+  },
+  "p1_target": {
+    "objective": "installable GitHub App prototype",
+    "requirements": [
+      "least-privilege read-only permissions by default",
+      "webhook signature verification",
+      "installation and repository scoping",
+      "historical bootstrap audit",
+      "incremental event ingestion",
+      "explicit credential and environment setup documentation",
+      "under-five-minute target when sufficient history is available"
+    ]
   }
 }
