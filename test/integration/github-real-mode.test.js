@@ -93,6 +93,10 @@ function inMemoryGithub({ runConclusion = "success", failAllAfter = null } = {})
         json: { workflow_runs: [runJson(1, "2026-07-01T15:10:00Z", "2026-07-01T15:20:00Z")] },
       };
     }
+    // Integration repair (cycle 32957437769): the github lane's workflow-jobs
+    // collector probes /actions/runs/{id}/jobs; serve an empty job list so
+    // real-mode sweeps stay read-only without fabricating evidence.
+    if (/\/actions\/runs\/(\d+)\/jobs$/.test(p)) return { status: 200, headers: {}, json: { total_count: 0, jobs: [] } };
     if (/\/commits\/([0-9a-f]+)\/check-runs$/.test(p)) return { status: 200, headers: {}, json: { check_runs: [] } };
     return { status: 404, headers: {}, json: null };
   };

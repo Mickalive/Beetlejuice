@@ -123,6 +123,10 @@ test(
       if (p.endsWith(`/repos/${owner}/${repo}/pulls`)) return { status: 200, headers: {}, json: [pull] };
       if (/\/pulls\/(\d+)\/commits$/.test(p)) return { status: 200, headers: {}, json: commits };
       if (p.endsWith("/actions/runs")) return { status: 200, headers: {}, json: { workflow_runs: runs } };
+      // Integration repair (cycle 32957437769): the github lane's workflow-jobs
+      // collector probes /actions/runs/{id}/jobs; serve an empty job list so the
+      // seam sweep stays read-only and complete without fabricating evidence.
+      if (/\/actions\/runs\/(\d+)\/jobs$/.test(p)) return { status: 200, headers: {}, json: { total_count: 0, jobs: [] } };
       if (/\/commits\/([0-9a-f]+)\/check-runs$/.test(p)) return { status: 200, headers: {}, json: { check_runs: [] } };
       return { status: 404, headers: {}, json: null };
     };
