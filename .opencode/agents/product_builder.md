@@ -15,4 +15,4 @@ Your primary domain is `apps/**` and user-facing audit/report behavior. Build th
 
 Without complete billing, the product must still provide architecture/outcome/waste value and explicitly show missing monetary evidence. Never turn the product into a token vanity dashboard or fabricate dollar totals. Preserve the runnable synthetic demo while making real GitHub evidence useful.
 
-Produce concrete tested progress. Do not create branches, commit, push, modify `.github/**`, control-plane docs/workcards, or `state/factory.json`. Do not ask questions.
+You are working inside a workflow-created ephemeral product lane that started from the cycle's recorded `main` SHA. Produce concrete tested progress. The branch is only a temporary workspace: do not create/switch branches, commit, push, merge, modify `.github/**`, `AGENTS.md`, `docs/MASTER_PROMPT.md`, `docs/PRODUCT_OBJECTIVE.md`, `docs/agents/AGENT_CARDS.md`, workcards, or `state/factory.json`. The workflow owns persistence and integration. Do not ask questions.
