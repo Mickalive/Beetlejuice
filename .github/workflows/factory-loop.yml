@@ -20,8 +20,6 @@ permissions:
 
 concurrency:
   group: beetlejuice-autonomous-continuation
-  # A control-plane edit replaces an obsolete implementation immediately.
-  # Scheduled ticks queue behind useful work instead of killing it.
   cancel-in-progress: ${{ github.event_name == 'push' }}
 
 jobs:
@@ -54,8 +52,6 @@ jobs:
         shell: bash
         run: |
           set -u
-
-          # Old cycle branches and lab/integration are no longer part of the design.
           mapfile -t OLD_REFS < <(
             gh api --paginate "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/cycle/" --jq '.[].ref' 2>/dev/null || true
           )
@@ -65,8 +61,6 @@ jobs:
           done
           gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/lab/integration" >/dev/null 2>&1 || true
 
-          # Preserve explicitly referenced evidence runs; keep only a very small recent
-          # history otherwise. Historical workflow runs are not part of product state.
           PRESERVE=$(jq -r '.. | objects | to_entries[]? | select(.key | test("run_id$")) | .value | select(type == "number")' state/factory.json 2>/dev/null | sort -u || true)
           mapfile -t RUN_ROWS < <(
             gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs?per_page=100" \
@@ -85,7 +79,6 @@ jobs:
             fi
             gh api --method DELETE "repos/${GITHUB_REPOSITORY}/actions/runs/${ID}" >/dev/null 2>&1 || true
           done
-
           echo "OBSOLETE_ORCHESTRATION_CLEANUP_DONE"
 
       - name: Stop immediately only for a genuinely terminal product
@@ -95,9 +88,9 @@ jobs:
           set -euo pipefail
           STATUS=$(jq -r '.status // "BUILDING"' state/factory.json)
           CONTINUE=$(jq -r '.continue // true' state/factory.json)
-          GROUPS=$(jq '[to_entries[] | select(.key | endswith("_checks")) | select(.value | type == "object")] | length' state/factory.json)
+          CHECK_GROUPS=$(jq '[to_entries[] | select(.key | endswith("_checks")) | select(.value | type == "object")] | length' state/factory.json)
           FALSE=$(jq '[to_entries[] | select(.key | endswith("_checks")) | select(.value | type == "object") | .value | to_entries[] | select(.value == false)] | length' state/factory.json)
-          if [[ "$STATUS" == "COMPLETE" && "$CONTINUE" == "false" && "$GROUPS" -gt 0 && "$FALSE" -eq 0 ]]; then
+          if [[ "$STATUS" == "COMPLETE" && "$CONTINUE" == "false" && "$CHECK_GROUPS" -gt 0 && "$FALSE" -eq 0 ]]; then
             echo "terminal=true" >> "$GITHUB_OUTPUT"
             echo "BEETLEJUICE_TERMINAL_STATE_VERIFIED"
           else
@@ -170,10 +163,7 @@ jobs:
 
           has_false() {
             local KEYS="$1"
-            jq -e --argjson keys "$KEYS" '
-              .p0_5_checks as $c |
-              any($keys[]; ($c[.] // false) == false)
-            ' state/factory.json >/dev/null 2>&1
+            jq -e --argjson keys "$KEYS" '.p0_5_checks as $c | any($keys[]; ($c[.] // false) == false)' state/factory.json >/dev/null 2>&1
           }
 
           ROLE_QUEUE=()
@@ -213,7 +203,8 @@ jobs:
             esac
             run_role "$ROLE" "$MISSION"
 
-            if [[ -n "$(git status --porcelain)" && "$(git status --porcelain)" != "$BEFORE" ]]; then
+            CURRENT=$(git status --porcelain)
+            if [[ -n "$CURRENT" && "$CURRENT" != "$BEFORE" ]]; then
               SPECIALIST_PROGRESS=true
               break
             fi
@@ -226,7 +217,6 @@ jobs:
             exit 67
           fi
 
-          # Only the Product Director owns durable state truth.
           git restore --source=HEAD --staged --worktree state/factory.json 2>/dev/null || true
 
           echo "===== FULL PRODUCT VALIDATION ====="
@@ -282,7 +272,6 @@ jobs:
             exit 75
           fi
 
-          # Auditor owns reports only.
           BAD=$(git status --porcelain | awk '{print $2}' | grep -v '^reports/' || true)
           if [[ -n "$BAD" ]]; then
             echo "::warning::Auditor attempted out-of-role edits; restoring them:"
@@ -328,7 +317,6 @@ jobs:
             exit 75
           fi
 
-          # Director owns state only.
           BAD=$(git status --porcelain | awk '{print $2}' | grep -v '^state/factory.json$' || true)
           if [[ -n "$BAD" ]]; then
             echo "::warning::Director attempted out-of-role edits; restoring all except durable state."
@@ -338,10 +326,10 @@ jobs:
           jq empty state/factory.json
           STATUS=$(jq -r '.status // "BUILDING"' state/factory.json)
           CONTINUE=$(jq -r '.continue // true' state/factory.json)
-          GROUPS=$(jq '[to_entries[] | select(.key | endswith("_checks")) | select(.value | type == "object")] | length' state/factory.json)
+          CHECK_GROUPS=$(jq '[to_entries[] | select(.key | endswith("_checks")) | select(.value | type == "object")] | length' state/factory.json)
           FALSE=$(jq '[to_entries[] | select(.key | endswith("_checks")) | select(.value | type == "object") | .value | to_entries[] | select(.value == false)] | length' state/factory.json)
 
-          if [[ "$STATUS" == "COMPLETE" && ( "$CONTINUE" != "false" || "$GROUPS" -eq 0 || "$FALSE" -ne 0 ) ]]; then
+          if [[ "$STATUS" == "COMPLETE" && ( "$CONTINUE" != "false" || "$CHECK_GROUPS" -eq 0 || "$FALSE" -ne 0 ) ]]; then
             echo "::error::Product Director attempted premature COMPLETE; rejecting state mutation."
             git restore --source=HEAD -- state/factory.json
             exit 69
