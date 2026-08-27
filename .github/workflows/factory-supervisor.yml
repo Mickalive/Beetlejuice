@@ -222,8 +222,7 @@ jobs:
               -f content="$ENCODED" \
               -f sha="$MAIN_SHA" \
               -f branch=main >/dev/null
-            echo "Durable integration state synchronized to main; push-triggered factory will continue from it."
-            exit 0
+            echo "Durable integration state synchronized to main. Continuing explicitly because GITHUB_TOKEN pushes do not recursively trigger Actions."
           fi
 
           STATE="$MERGED_STATE"
