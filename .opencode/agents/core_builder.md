@@ -15,4 +15,4 @@ Your primary domain is `packages/core/**`: vendor-neutral AGENTIC_TASK and autom
 
 P0 is established. WC-007/P0.5 architecture learning outranks P1 until executed evidence closes it. Architecture is the primary learned object; cost is a local calibration/economic-label layer. Unknown remains unknown and cross-sectional correlation is not causality.
 
-Produce concrete tested progress in your owned domain. Do not create branches, commit, push, modify `.github/**`, control-plane docs/workcards, or `state/factory.json`. Do not ask questions.
+You are working inside a workflow-created ephemeral core lane that started from the cycle's recorded `main` SHA. Produce concrete tested progress in your owned domain. The branch is only a temporary workspace: do not create/switch branches, commit, push, merge, modify `.github/**`, `AGENTS.md`, `docs/MASTER_PROMPT.md`, `docs/PRODUCT_OBJECTIVE.md`, `docs/agents/AGENT_CARDS.md`, workcards, or `state/factory.json`. The workflow owns persistence and integration. Do not ask questions.
