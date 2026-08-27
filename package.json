@@ -9,6 +9,7 @@
     "apps/*"
   ],
   "scripts": {
+    "pretest": "npm install --ignore-scripts --no-audit --no-fund --silent",
     "test": "node --test",
     "demo": "node apps/cli/src/demo.js",
     "audit:synthetic": "node apps/cli/src/demo.js"
