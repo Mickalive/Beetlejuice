@@ -1,440 +1,183 @@
-name: BEETLEJUICE Product Factory
+name: BEETLEJUICE Autonomous Continuation
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: "*/5 * * * *"
   push:
     branches: [main]
-  schedule:
-    - cron: "11 */6 * * *"
+    paths:
+      - '.github/workflows/factory-loop.yml'
+      - '.opencode/agents/product_director.md'
 
 permissions:
   contents: write
-  actions: write
+  actions: read
 
 concurrency:
   group: beetlejuice-product-factory
-  cancel-in-progress: false
-
-env:
-  BEETLEJUICE_MODEL: opencode/x-preview-f-free
+  # A control-plane edit replaces the obsolete implementation immediately.
+  # Normal scheduled ticks never interrupt useful work already in progress.
+  cancel-in-progress: ${{ github.event_name == 'push' }}
 
 jobs:
-  lanes:
-    name: "BUILD — ${{ matrix.lane }}"
+  continue-product:
+    name: Continue Beetlejuice product
     runs-on: ubuntu-latest
-    timeout-minutes: 210
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - lane: core
-            agent: core_builder
-            owned_path: packages/core
-            mission: "Advance the highest-priority unfinished core/domain-model gate from durable state. P0.5 architecture learning comes before P1; once P0_5_READY is evidenced, advance the next P1/roadmap core capability instead of repeating completed work."
-          - lane: github
-            agent: github_builder
-            owned_path: packages/github
-            mission: "Advance the highest-priority unfinished GitHub/evidence gate from durable state. P0.5 real-GitHub architecture reconstruction comes before P1; once P0_5_READY is evidenced, advance the next installable GitHub App/roadmap adapter capability."
-          - lane: privacy
-            agent: privacy_builder
-            owned_path: packages/privacy
-            mission: "Advance the highest-priority unfinished privacy/data-boundary gate from durable state. P0.5 unlinkable architecture export comes before P1; after it is evidenced, advance the next privacy requirement of the active roadmap phase."
-          - lane: product
-            agent: product_builder
-            owned_path: apps
-            mission: "Advance the highest-priority unfinished product-surface gate from durable state. P0.5 real-world architecture evidence comes before P1; once P0_5_READY is evidenced, advance the next installable product/roadmap capability rather than polishing a completed gate."
+    timeout-minutes: 55
 
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout the single durable branch
+        uses: actions/checkout@v6
         with:
+          ref: main
           fetch-depth: 0
 
-      - name: Start product lane with binding main policy and durable progress state
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Configure repository writer
         shell: bash
         run: |
-          set -euo pipefail
-          git fetch origin main
-
-          CONTROL=/tmp/beetlejuice-control-plane
-          rm -rf "$CONTROL"
-          mkdir -p "$CONTROL"
-          for path in .github/scripts .opencode AGENTS.md docs; do
-            if git cat-file -e "origin/main:${path}" 2>/dev/null; then
-              git archive --format=tar origin/main "$path" | tar -xf - -C "$CONTROL"
-            fi
-          done
-
-          if git ls-remote --exit-code --heads origin refs/heads/lab/integration >/dev/null 2>&1; then
-            git fetch origin lab/integration:refs/remotes/origin/lab/integration
-            BASE=origin/lab/integration
-          else
-            BASE=origin/main
-          fi
-          BASE_SHA=$(git rev-parse "$BASE")
-          BRANCH="cycle/${GITHUB_RUN_ID}/${{ matrix.lane }}"
-          git switch -C "$BRANCH" "$BASE_SHA"
-          cp -a "$CONTROL/." .
-
-          echo "BEETLEJUICE_CYCLE_BRANCH=$BRANCH" >> "$GITHUB_ENV"
-          echo "BEETLEJUICE_CYCLE_BASE_SHA=$BASE_SHA" >> "$GITHUB_ENV"
+          git config user.name "beetlejuice-autonomous-director"
+          git config user.email "beetlejuice-autonomous@users.noreply.github.com"
 
       - name: Install OpenCode
         shell: bash
-        run: bash .github/scripts/install-opencode-with-retry.sh
-
-      - name: Run lane agent with resilient retry
-        shell: bash
-        run: |
-          bash .github/scripts/run-opencode-with-retry.sh run \
-            --model "$BEETLEJUICE_MODEL" \
-            --agent "${{ matrix.agent }}" \
-            "${{ matrix.mission }} Work only on the already-checked-out cycle branch from the immutable integration product base. Binding policy (.opencode, AGENTS.md, docs and runtime scripts) comes from current main; cumulative progress state comes from lab/integration and must never be reset by an older main copy. Read state/factory.json and the product objective to identify the active gate. P0 is already green. P0.5 outranks P1 until P0_5_READY is defensible; once it is, move to P1 and then the next declared roadmap work instead of repeating completed P0.5 tasks. Produce durable tested product progress inside your owned path ${{ matrix.owned_path }}. Do NOT git fetch, pull, merge, rebase, cherry-pick, switch, checkout or reset to another ref. Do NOT modify .github/**, docs/**, AGENTS.md or state/**. Inspect state/factory.json only as read-only context; do not declare global product completion. Never put credential-shaped literal fixtures (Slack/GitHub/AWS/API tokens or similar) in source or tests; construct fake sensitive values from harmless fragments at runtime. Follow the AGENTS.md anti-spin rule: after a zero-delta approach, change strategy rather than repeating it."
-
-      - name: Repair credential-shaped fixtures before persistence
-        if: always()
-        shell: bash
         run: |
           set -euo pipefail
-          echo "BEETLEJUICE_SNAPSHOT_SAFE=false" >> "$GITHUB_ENV"
-          OWNED="${{ matrix.owned_path }}"
-          [[ -d "$OWNED" ]] || { echo "::error::Owned path missing: $OWNED"; exit 1; }
-          MATCHES=$(grep -RIlE 'xox[baprs]-[A-Za-z0-9-]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}' "$OWNED" --exclude-dir=node_modules --exclude-dir=.git 2>/dev/null || true)
-          REPAIR_RC=0
-          if [[ -n "$MATCHES" ]]; then
-            printf 'Credential-shaped literals detected in:\n%s\n' "$MATCHES"
-            bash .github/scripts/run-opencode-with-retry.sh run \
-              --model "$BEETLEJUICE_MODEL" \
-              --agent "${{ matrix.agent }}" \
-              "Before this lane can be persisted, remove every credential-shaped literal from these owned-lane files: ${MATCHES//$'\n'/, }. Preserve the test intent by constructing fake values from harmless string fragments at runtime. Do not expose or print the sensitive-looking values. Work only inside $OWNED; do not fetch/merge/rebase or modify the control plane. Re-run the affected tests." || REPAIR_RC=$?
-          fi
-          REMAINING=$(grep -RIlE 'xox[baprs]-[A-Za-z0-9-]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}' "$OWNED" --exclude-dir=node_modules --exclude-dir=.git 2>/dev/null || true)
-          if [[ "$REPAIR_RC" -ne 0 || -n "$REMAINING" ]]; then
-            echo "::error::Lane is not safe to persist; credential-shaped fixture repair failed or literals remain."
-            exit 1
-          fi
-          echo "BEETLEJUICE_SNAPSHOT_SAFE=true" >> "$GITHUB_ENV"
-
-      - name: Rebuild hermetic lane snapshot
-        if: always()
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "BEETLEJUICE_SNAPSHOT_READY=false" >> "$GITHUB_ENV"
-          OWNED="${{ matrix.owned_path }}"
-          SNAP="/tmp/beetlejuice-owned-${{ matrix.lane }}"
-          [[ -d "$OWNED" ]] || { echo "::error::Owned path missing: $OWNED"; exit 1; }
-          rm -rf "$SNAP"
-          mkdir -p "$SNAP/$(dirname "$OWNED")"
-          cp -a "$OWNED" "$SNAP/$OWNED"
-
-          git reset --hard "$BEETLEJUICE_CYCLE_BASE_SHA"
-          git clean -fdx
-          rm -rf "$OWNED"
-          mkdir -p "$(dirname "$OWNED")"
-          cp -a "$SNAP/$OWNED" "$OWNED"
-
-          git config user.name "beetlejuice-${{ matrix.lane }}-builder"
-          git config user.email "beetlejuice-${{ matrix.lane }}@autonomous.local"
-          git add -- "$OWNED"
-          git commit -m "Factory ${GITHUB_RUN_ID}: ${{ matrix.lane }} hermetic lane" || true
-
-          BAD=$(git diff --name-only "$BEETLEJUICE_CYCLE_BASE_SHA"..HEAD | grep -vE '^${{ matrix.owned_path }}(/|$)' || true)
-          if [[ -n "$BAD" ]]; then
-            echo "::error::Hermetic snapshot contains out-of-lane files:"
-            echo "$BAD"
-            exit 1
-          fi
-          echo "BEETLEJUICE_SNAPSHOT_READY=true" >> "$GITHUB_ENV"
-
-      - name: Archive lane snapshot before tests and push
-        if: always() && env.BEETLEJUICE_SNAPSHOT_SAFE == 'true' && env.BEETLEJUICE_SNAPSHOT_READY == 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: beetlejuice-lane-${{ matrix.lane }}-${{ github.run_id }}
-          path: ${{ matrix.owned_path }}
-          if-no-files-found: error
-          retention-days: 7
-
-      - name: Install workspace for hermetic tests
-        if: always() && env.BEETLEJUICE_SNAPSHOT_READY == 'true'
-        shell: bash
-        run: npm install --ignore-scripts
-
-      - name: Run real lane tests
-        if: always() && env.BEETLEJUICE_SNAPSHOT_READY == 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-          OWNED="${{ matrix.owned_path }}"
-          FOUND=0
-          while IFS= read -r manifest; do
-            DIR=$(dirname "$manifest")
-            if node -e 'const p=require(process.argv[1]); process.exit(p.scripts && p.scripts.test ? 0 : 1)' "./$manifest"; then
-              FOUND=1
-              echo "Running tests in $DIR"
-              npm test --prefix "$DIR"
+          for attempt in 1 2 3; do
+            if curl -fsSL https://opencode.ai/install | bash; then
+              break
             fi
-          done < <(find "$OWNED" -name package.json -not -path '*/node_modules/*' -print | sort)
-          if [[ "$FOUND" -eq 0 ]]; then
-            echo "::error::No runnable test script found in owned lane $OWNED"
-            exit 1
-          fi
+            if [[ "$attempt" == 3 ]]; then
+              echo "::error::OpenCode installation failed after 3 attempts"
+              exit 70
+            fi
+            sleep $((attempt * 10))
+          done
+          echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
+          "$HOME/.opencode/bin/opencode" --version
 
-      - name: Persist lane snapshot
-        if: always() && env.BEETLEJUICE_SNAPSHOT_SAFE == 'true' && env.BEETLEJUICE_SNAPSHOT_READY == 'true'
+      - name: Advance the product from durable repo truth
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          git push --force origin "HEAD:refs/heads/${BEETLEJUICE_CYCLE_BRANCH}"
 
-  integration:
-    name: INTEGRATION DIRECTOR
-    needs: [lanes]
-    if: ${{ always() && !cancelled() }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 270
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
+          OPENCODE="$HOME/.opencode/bin/opencode"
+          MODELS=(
+            "opencode/x-preview-f-free"
+            "opencode/nemotron-3.5-lightning-free"
+            "opencode/hy3-free"
+          )
+          MAX_ROUNDS=3
 
-      - name: Download durable lane backups
-        if: always()
-        continue-on-error: true
-        uses: actions/download-artifact@v4
-        with:
-          pattern: beetlejuice-lane-*-${{ github.run_id }}
-          path: /tmp/beetlejuice_lane_artifacts
+          terminal_state() {
+            [[ -f state/factory.json ]] || return 1
+            local status continue_flag false_gates check_groups
+            status=$(jq -r '.status // "BUILDING"' state/factory.json 2>/dev/null || echo BUILDING)
+            continue_flag=$(jq -r '.continue // true' state/factory.json 2>/dev/null || echo true)
+            check_groups=$(jq '[to_entries[] | select(.key | endswith("_checks")) | select(.value | type == "object")] | length' state/factory.json 2>/dev/null || echo 0)
+            false_gates=$(jq '[to_entries[] | select(.key | endswith("_checks")) | select(.value | type == "object") | .value | to_entries[] | select(.value == false)] | length' state/factory.json 2>/dev/null || echo 999)
+            [[ "$status" == "COMPLETE" && "$continue_flag" == "false" && "$check_groups" -gt 0 && "$false_gates" -eq 0 ]]
+          }
 
-      - name: Checkout product candidate with binding main policy and mount lanes
-        shell: bash
-        run: |
-          set -euo pipefail
-          git fetch origin main
+          for ROUND in $(seq 1 "$MAX_ROUNDS"); do
+            echo "===== AUTONOMOUS ROUND $ROUND/$MAX_ROUNDS ====="
+            git fetch origin main
+            git reset --hard origin/main
 
-          CONTROL=/tmp/beetlejuice-control-plane
-          rm -rf "$CONTROL"
-          mkdir -p "$CONTROL"
-          for path in .github/scripts .opencode AGENTS.md docs; do
-            if git cat-file -e "origin/main:${path}" 2>/dev/null; then
-              git archive --format=tar origin/main "$path" | tar -xf - -C "$CONTROL"
+            if terminal_state; then
+              echo "BEETLEJUICE_TERMINAL_STATE_VERIFIED"
+              exit 0
+            fi
+
+            ROUND_COMMITTED=false
+
+            for MODEL in "${MODELS[@]}"; do
+              echo "Trying autonomous director with model=$MODEL"
+
+              PROMPT=$(cat <<'EOF'
+          You are the sole autonomous continuation agent for BEETLEJUICE. There are no lanes, no supervisor, no integration director, and no other agent that will finish your work later.
+
+          Read AGENTS.md, docs/MASTER_PROMPT.md, docs/PRODUCT_OBJECTIVE.md, docs/agents/AGENT_CARDS.md, every workcard, state/factory.json, existing reports, tests, and the actual implementation before deciding what to do.
+
+          The durable objective from the project conversation is binding: build the actual Beetlejuice product. P0 is already established. P0.5 real-world architecture-learning evidence is the active gate before P1 unless the repository contains executed evidence proving otherwise. The primary learned object is automation architecture; billing is a tenant-local calibration/economic-label layer. Do not turn the project into a token dashboard. Do not invent real-world evidence, monetary evidence, causality, or completion.
+
+          In this invocation, identify the single highest-value unfinished repo-local action and IMPLEMENT IT end-to-end. Prefer concrete code, executable evidence collection, tests, real public GitHub evidence, architecture reconstruction, privacy-safe export, or the next product capability over prose. If the active gate requires public GitHub evidence, you may use GH_TOKEN/gh/curl and the network. A provider outage, a failed previous workflow, or missing optional billing credentials is never a reason to stop repo-local work.
+
+          You may edit anywhere in the product repository that is needed, including packages, apps, tests, reports, docs, and state/factory.json. Do NOT modify anything under .github/workflows or .github/scripts. Do NOT create cycle branches, do NOT use lab/integration, and do NOT git commit or push; the workflow owns persistence. Work directly on the checked-out main candidate.
+
+          Before returning, run the relevant tests yourself. Update state/factory.json only to facts supported by executed evidence. Keep continue=true unless the product is genuinely COMPLETE with every declared check group true. Never claim a gate from fixtures or prose when it requires executed real-world evidence. If an approach yields no durable delta, change strategy within this invocation rather than returning empty-handed.
+          EOF
+          )
+
+              LOG="/tmp/beetlejuice-opencode-${ROUND}-$(echo "$MODEL" | tr '/:' '__').log"
+              set +e
+              timeout 14m "$OPENCODE" run --model "$MODEL" --agent product_director "$PROMPT" 2>&1 | tee "$LOG"
+              RC=${PIPESTATUS[0]}
+              set -e
+
+              if [[ "$RC" -ne 0 ]]; then
+                echo "::warning::model=$MODEL failed rc=$RC; moving to the next free model without long sleep"
+                sleep 5
+                continue
+              fi
+
+              # The automation itself is immutable to its agent. Product work may never
+              # silently rewrite the mechanism keeping the project alive.
+              git restore --source=HEAD --staged --worktree .github/workflows 2>/dev/null || true
+              git restore --source=HEAD --staged --worktree .github/scripts 2>/dev/null || true
+
+              if git diff --quiet && git diff --cached --quiet && [[ -z "$(git ls-files --others --exclude-standard)" ]]; then
+                if terminal_state; then
+                  echo "BEETLEJUICE_TERMINAL_STATE_VERIFIED_AFTER_AGENT"
+                  exit 0
+                fi
+                echo "::warning::model=$MODEL returned success with zero durable delta; trying the next model"
+                continue
+              fi
+
+              echo "Validating candidate produced by model=$MODEL"
+              npm install --ignore-scripts --no-audit --no-fund --silent
+              set +e
+              npm test
+              TEST_RC=$?
+              npm run demo
+              DEMO_RC=$?
+              set -e
+
+              if [[ "$TEST_RC" -ne 0 || "$DEMO_RC" -ne 0 ]]; then
+                echo "::warning::candidate from model=$MODEL is not green (test=$TEST_RC demo=$DEMO_RC); next model must repair the same worktree"
+                continue
+              fi
+
+              git add -A
+              if git diff --cached --quiet; then
+                echo "::warning::validated candidate contains no committable delta; trying next model"
+                continue
+              fi
+
+              git commit -m "factory: autonomous product progress ${GITHUB_RUN_ID}.${ROUND}"
+
+              # A human/control-plane edit may have landed while the agent worked. Rebase
+              # rather than overwriting it. If conflict occurs, fail visibly; the next
+              # scheduled tick starts from repository truth again.
+              git pull --rebase origin main
+              git push origin HEAD:main
+              echo "BEETLEJUICE_PROGRESS_COMMITTED round=$ROUND model=$MODEL head=$(git rev-parse HEAD)"
+              ROUND_COMMITTED=true
+              break
+            done
+
+            if [[ "$ROUND_COMMITTED" != true ]]; then
+              echo "::error::No model produced tested durable progress in round $ROUND. The scheduled workflow will retry from main on the next tick."
+              exit 68
             fi
           done
 
-          if git ls-remote --exit-code --heads origin refs/heads/lab/integration >/dev/null 2>&1; then
-            git fetch origin lab/integration:refs/remotes/origin/lab/integration
-            git switch -C lab/integration origin/lab/integration
-          else
-            git switch -C lab/integration origin/main
-          fi
-          cp -a "$CONTROL/." .
-
-          for lane in core github privacy product; do
-            REMOTE="cycle/${GITHUB_RUN_ID}/${lane}"
-            DEST="/tmp/beetlejuice_${lane}"
-            ART="/tmp/beetlejuice_lane_artifacts/beetlejuice-lane-${lane}-${GITHUB_RUN_ID}"
-            rm -rf "$DEST"
-            if git ls-remote --exit-code --heads origin "refs/heads/$REMOTE" >/dev/null 2>&1; then
-              git fetch origin "$REMOTE:refs/remotes/origin/$REMOTE"
-              git worktree add --detach "$DEST" "origin/$REMOTE"
-            elif [[ -d "$ART" ]]; then
-              mkdir -p "$DEST"
-              cp -a "$ART/." "$DEST/"
-              echo "Recovered $lane from workflow artifact because branch snapshot was unavailable."
-            else
-              mkdir -p "$DEST"
-              echo "Lane $lane produced no durable snapshot in run $GITHUB_RUN_ID" > "$DEST/LANE_MISSING.txt"
-            fi
-          done
-
-      - name: Install OpenCode
-        shell: bash
-        run: bash .github/scripts/install-opencode-with-retry.sh
-
-      - name: Integrate, repair, and advance active gate
-        shell: bash
-        run: |
-          bash .github/scripts/run-opencode-with-retry.sh run \
-            --model "$BEETLEJUICE_MODEL" \
-            --agent integration_director \
-            "Integrate Factory cycle ${GITHUB_RUN_ID} against binding policy from current main and cumulative progress from lab/integration. Lane snapshots are mounted at /tmp/beetlejuice_core, /tmp/beetlejuice_github, /tmp/beetlejuice_privacy and /tmp/beetlejuice_product. Bring in all useful non-conflicting product progress, repair interfaces/root config/tests as needed, and execute the strongest checks for the active gate in state/factory.json. P0 is green. P0.5 must be proven before P1; after P0_5_READY, integrate P1/next-roadmap work rather than re-running completed P0.5 work. Update state/factory.json only from verified evidence. Never mark real-world gates passed from fixtures or prose. Follow the anti-spin rule and leave one runnable integrated product candidate."
-
-      - name: Verify integrated candidate
-        if: always()
-        shell: bash
-        run: |
-          set +e
-          mkdir -p reports
-          npm test
-          TEST_RC=$?
-          npm run demo
-          DEMO_RC=$?
-          echo "integration_test_rc=$TEST_RC" > reports/integration-runtime-status.txt
-          echo "demo_rc=$DEMO_RC" >> reports/integration-runtime-status.txt
-          if [[ "$TEST_RC" -ne 0 || "$DEMO_RC" -ne 0 ]]; then
-            echo "::error::Integrated candidate failed verification: tests=$TEST_RC demo=$DEMO_RC"
-            exit 1
-          fi
-          exit 0
-
-      - name: Persist integration branch without policy overlay
-        if: always()
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p reports state
-          git config user.name "beetlejuice-integration-director"
-          git config user.email "beetlejuice-integration@autonomous.local"
-          git add -A -- . \
-            ':(exclude).github/scripts/**' \
-            ':(exclude).opencode/**' \
-            ':(exclude)AGENTS.md' \
-            ':(exclude)docs/**'
-          git commit -m "Factory ${GITHUB_RUN_ID}: integrate product candidate" || true
-          git push origin HEAD:refs/heads/lab/integration
-
-  audit:
-    name: ADVERSARIAL ACTIVE-GATE AUDIT
-    needs: [integration]
-    if: ${{ always() && !cancelled() }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 150
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - name: Mount integration candidate with binding main policy
-        shell: bash
-        run: |
-          set -euo pipefail
-          git fetch origin main
-          CONTROL=/tmp/beetlejuice-control-plane
-          rm -rf "$CONTROL"
-          mkdir -p "$CONTROL"
-          for path in .github/scripts .opencode AGENTS.md docs; do
-            if git cat-file -e "origin/main:${path}" 2>/dev/null; then
-              git archive --format=tar origin/main "$path" | tar -xf - -C "$CONTROL"
-            fi
-          done
-          git fetch origin lab/integration:refs/remotes/origin/lab/integration
-          git switch -C "cycle/${GITHUB_RUN_ID}/audit" origin/lab/integration
-          cp -a "$CONTROL/." .
-
-      - name: Install OpenCode
-        shell: bash
-        run: bash .github/scripts/install-opencode-with-retry.sh
-
-      - name: Audit active product gate adversarially
-        shell: bash
-        run: |
-          bash .github/scripts/run-opencode-with-retry.sh run \
-            --model "$BEETLEJUICE_MODEL" \
-            --agent product_auditor \
-            "Adversarially audit the integrated Beetlejuice candidate from Factory cycle ${GITHUB_RUN_ID} against the active gate in durable state and binding workcards/objective. While P0.5 is unfinished, falsify WC-007 architecture reconstruction fidelity, topology/policy representation, provenance confidence, real HTTPS ingestion, pagination/rate-limit/network handling, classification/outcome attribution, certain structural-waste precision, unlinkable privacy export, billing honesty and later billing attachment. Once P0_5_READY is verified, audit P1 and subsequent active roadmap claims instead of repeating completed P0.5 work. Write reports/latest-product-audit.md and any gate-specific executed-evidence report. Never mark a gate passed from fixtures/prose when real evidence is required."
-
-      - name: Persist audit snapshot
-        if: always()
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name "beetlejuice-product-auditor"
-          git config user.email "beetlejuice-auditor@autonomous.local"
-          git add reports || true
-          git commit -m "Factory ${GITHUB_RUN_ID}: adversarial active-gate audit" || true
-          git push --force origin "HEAD:refs/heads/cycle/${GITHUB_RUN_ID}/audit"
-
-  direction:
-    name: PRODUCT DIRECTOR — CONTINUE OR GATE
-    needs: [integration, audit]
-    if: ${{ always() && !cancelled() }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 150
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - name: Checkout durable integration with binding main policy and mount audit
-        shell: bash
-        run: |
-          set -euo pipefail
-          git fetch origin main
-          CONTROL=/tmp/beetlejuice-control-plane
-          rm -rf "$CONTROL"
-          mkdir -p "$CONTROL"
-          for path in .github/scripts .opencode AGENTS.md docs; do
-            if git cat-file -e "origin/main:${path}" 2>/dev/null; then
-              git archive --format=tar origin/main "$path" | tar -xf - -C "$CONTROL"
-            fi
-          done
-          git fetch origin lab/integration:refs/remotes/origin/lab/integration
-          git switch -C lab/integration origin/lab/integration
-          cp -a "$CONTROL/." .
-          AUDIT="cycle/${GITHUB_RUN_ID}/audit"
-          if git ls-remote --exit-code --heads origin "refs/heads/$AUDIT" >/dev/null 2>&1; then
-            git fetch origin "$AUDIT:refs/remotes/origin/$AUDIT"
-            git show "origin/$AUDIT:reports/latest-product-audit.md" > reports/latest-product-audit.md 2>/dev/null || true
-            git show "origin/$AUDIT:reports/real-world-robustness.md" > reports/real-world-robustness.md 2>/dev/null || true
-          fi
-
-      - name: Install OpenCode
-        shell: bash
-        run: bash .github/scripts/install-opencode-with-retry.sh
-
-      - name: Set evidence-gated autonomous direction
-        shell: bash
-        run: |
-          bash .github/scripts/run-opencode-with-retry.sh run \
-            --model "$BEETLEJUICE_MODEL" \
-            --agent product_director \
-            "Close Factory cycle ${GITHUB_RUN_ID} using binding current-main policy and cumulative lab/integration state. Determine the highest-priority unfinished gate from state/factory.json, docs/PRODUCT_OBJECTIVE.md and workcards. P0 is verified. Until P0_5_READY is defensible, P0.5 outranks P1. Once P0.5 is green, advance P1 and then subsequent declared roadmap work; never keep cycling a completed gate. Update state/factory.json truthfully from executed evidence. If any gap is buildable in-repo, keep continue=true and next_action must name the highest-value concrete next experiment/repair/capability. Follow the anti-spin rule after a zero-delta cycle. Never stop because a lane/test/network/provider call failed. Only request human action after every safe repo-local route is exhausted. COMPLETE requires all declared check groups green plus terminal_ready=true and must not be used as a convenience stop."
-
-      - name: Validate liveness and persist factory state
-        if: always()
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -f state/factory.json || { echo "::error::Missing state/factory.json"; exit 1; }
-          STATUS=$(jq -r '.status // empty' state/factory.json)
-          CONTINUE=$(jq -r '.continue // empty' state/factory.json)
-          REQUIRES_USER=$(jq -r '.requires_user_action // false' state/factory.json)
-          LOCAL_EXHAUSTED=$(jq -r '.repo_local_work_exhausted // false' state/factory.json)
-          TERMINAL_READY=$(jq -r '.terminal_ready // false' state/factory.json)
-          REMAINING=$(jq '[to_entries[] | select(.key | endswith("_checks")) | select(.value | type == "object") | .value | to_entries[] | select(.value == false)] | length' state/factory.json)
-          CHECK_GROUPS=$(jq '[to_entries[] | select(.key | endswith("_checks")) | select(.value | type == "object")] | length' state/factory.json)
-
-          case "$STATUS" in BUILDING|INTEGRATING|BLOCKED_EXTERNAL|P0_READY|P0_5_READY|COMPLETE) ;; *) echo "::error::Invalid factory status: $STATUS"; exit 1;; esac
-          case "$CONTINUE" in true|false) ;; *) echo "::error::Invalid continue flag"; exit 1;; esac
-
-          # No LLM may silently stop useful repo-local work. Normalize premature
-          # stop states before persistence; the supervisor independently enforces
-          # the same terminal predicate as a second line of defense.
-          if [[ "$STATUS" == "COMPLETE" && ! ( "$REMAINING" -eq 0 && "$CHECK_GROUPS" -gt 0 && "$TERMINAL_READY" == true ) ]]; then
-            echo "::warning::Premature COMPLETE rejected: remaining=$REMAINING terminal_ready=$TERMINAL_READY"
-            STATUS=BUILDING
-            CONTINUE=true
-          fi
-          if [[ "$CONTINUE" != true && ! ( "$STATUS" == "COMPLETE" || ( "$REQUIRES_USER" == true && "$LOCAL_EXHAUSTED" == true ) ) ]]; then
-            echo "::warning::Premature continue=false rejected while repo-local work may remain."
-            CONTINUE=true
-          fi
-          if [[ "$STATUS" == "BLOCKED_EXTERNAL" && ! ( "$REQUIRES_USER" == true && "$LOCAL_EXHAUSTED" == true ) ]]; then
-            echo "::warning::BLOCKED_EXTERNAL is non-terminal while repo-local work remains."
-            STATUS=BUILDING
-            CONTINUE=true
-          fi
-
-          TMP=$(mktemp)
-          jq --arg commit "$(git rev-parse HEAD)" \
-             --argjson cycle "${GITHUB_RUN_ID}" \
-             --arg status "$STATUS" \
-             --argjson cont "$CONTINUE" \
-             '.last_verified_commit=$commit | .cycle=$cycle | .status=$status | .continue=$cont' \
-             state/factory.json > "$TMP"
-          mv "$TMP" state/factory.json
-          git config user.name "beetlejuice-product-director"
-          git config user.email "beetlejuice-director@autonomous.local"
-          git add state reports || true
-          git commit -m "Factory ${GITHUB_RUN_ID}: autonomous product direction" || true
-          git push origin HEAD:refs/heads/lab/integration
+          echo "Completed $MAX_ROUNDS productive rounds; next scheduled tick will continue from main."
