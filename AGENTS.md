@@ -126,16 +126,19 @@ A distinct, explicitly versioned `AGENTIC_DYNAMICS_EXPORT` may later export abst
 ## Autonomous factory liveness
 The repository must keep advancing without a human while useful repo-local work exists.
 
-- There is exactly ONE GitHub continuation workflow. It owns orchestration, Git mechanics, validation, final persistence and cleanup. There is no supervisor workflow and no workflow-triggering-workflow chain.
+- There is exactly ONE GitHub continuation workflow. It owns orchestration, Git mechanics, validation, final persistence, cleanup and the verified handoff to exactly one queued successor run. There is no separate supervisor or second workflow.
 - `main` is the only durable product/control/progress state. `state/factory.json` on `main` is the only durable factory state. There is no persistent `lab/integration` state and no lane-local state authority.
-- Ox is the only autonomous coding/reasoning model. Provider failures, rate limits and stalls get a short bounded Ox retry inside the affected role; after that the lane/cycle yields and the next scheduled tick retries from durable `main`. Never silently substitute another model.
-- Builder roles may run in parallel only on workflow-created ephemeral branches, all cut from the exact same recorded `main` SHA. A builder may not update `state/factory.json` or the binding control plane.
+- Builder/coding invocations MUST use this ordered free-model chain: `opencode/deepseek-v4-flash-free` -> `opencode/north-mini-code-free` -> `opencode/laguna-s-2.1-free`. A failed model yields immediately to the next model in this order; do not retry the same failed model before trying the next configured one.
+- Review/direction invocations (`product_auditor`, `product_director`) MUST use: `opencode/laguna-s-2.1-free` -> `opencode/deepseek-v4-flash-free` -> `opencode/mimo-v2.5-free`.
+- `integration_director` uses the BUILD chain when resolving merge conflicts or repairing failing code/tests. No unlisted fallback model may be substituted silently.
+- Builder roles may run in parallel only on workflow-created ephemeral branches/worktrees, all cut from the exact same recorded `main` SHA. A builder may not update `state/factory.json` or the binding control plane.
 - A failed or zero-delta builder lane must not erase successful sibling work. The integration phase consumes only lane branches that actually contain validated commits.
 - `integration_director` assembles useful lane outputs on one temporary integration candidate, resolves semantic conflicts and repairs the complete test/demo path. The integration candidate is not a second durable world.
 - `product_auditor` then tries to falsify the assembled candidate. `product_director` alone updates `state/factory.json` from executed candidate + audit evidence. Only then may the workflow advance `main`.
+- The current cycle must prepare and verify a successor run while work remains; the cron is only a backstop. The successor waits behind the single concurrency group and resumes from durable `main` after the current cycle exits.
 - A failed lane, failed test, failed integration, provider outage, `BLOCKED_EXTERNAL`, or accidental `continue=false` is not a terminal condition while another repo-local repair, experiment, fixture, corpus slice, test, refactor or diagnostic can advance a declared gate.
 - `COMPLETE` is evidence-gated, not an LLM opinion. A terminal state requires every declared machine-checkable check group to be true and the MASTER_PROMPT terminal requirements to be genuinely satisfied.
-- Ephemeral branches are deleted after every cycle, including failed cycles. Old `cycle/*`, `lab/integration`, obsolete workflow runs and transient artifacts are cleanup targets, never recovery state.
+- Ephemeral branches/worktrees are deleted after every cycle, including failed cycles. Old `cycle/*`, `lab/integration`, obsolete workflow runs and transient artifacts are cleanup targets, never recovery state.
 
 ### Anti-spin rule
 Autonomy means progress, not infinite repetition. If a cycle fails to create a durable capability/evidence/state delta, the next attempt must not merely repeat the same approach.
