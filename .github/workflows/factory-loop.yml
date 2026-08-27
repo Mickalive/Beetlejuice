@@ -56,7 +56,6 @@ jobs:
             exit 64
           fi
 
-          # No old branch is recovery state. A new cycle always derives from main.
           for PREFIX in "factory/" "cycle/"; do
             mapfile -t REFS < <(
               gh api --paginate "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${PREFIX}" \
@@ -69,8 +68,6 @@ jobs:
           done
           gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/lab/integration" >/dev/null 2>&1 || true
 
-          # Anything else still alive is obsolete orchestration. This workflow is
-          # protected by its single concurrency group and never cancels itself.
           mapfile -t LIVE_RUNS < <(
             gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs?per_page=100" \
               --jq '.workflow_runs[] | select(.status != "completed") | [.id,.name,.status] | @tsv' 2>/dev/null || true
@@ -84,27 +81,28 @@ jobs:
             gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${ID}/force-cancel" >/dev/null 2>&1 || true
           done
 
-          # Preserve evidence run IDs referenced by durable state; keep only the
-          # newest completed run per historical workflow name otherwise.
+          # Preserve only explicitly referenced evidence plus the two newest runs
+          # of the CURRENT workflow. Every completed run belonging to an obsolete
+          # workflow name is deleted instead of being retained for nostalgia.
+          CURRENT_WORKFLOW_NAME="BEETLEJUICE Parallel Factory"
           PRESERVE=$(jq -r '.. | objects | to_entries[]? | select(.key | test("run_id$")) | .value | select(type == "number")' state/factory.json 2>/dev/null | sort -u || true)
           mapfile -t RUN_ROWS < <(
             gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs?per_page=100" \
               --jq '.workflow_runs[] | select(.status == "completed") | [.id,.name,.created_at] | @tsv' 2>/dev/null || true
           )
-          declare -A KEPT=()
+          CURRENT_KEPT=0
           for ROW in "${RUN_ROWS[@]}"; do
             IFS=$'\t' read -r ID NAME CREATED <<<"$ROW"
             [[ "$ID" == "$GITHUB_RUN_ID" ]] && continue
             grep -qx "$ID" <<<"$PRESERVE" 2>/dev/null && continue
-            COUNT=${KEPT["$NAME"]:-0}
-            if (( COUNT < 1 )); then
-              KEPT["$NAME"]=$((COUNT + 1))
+            if [[ "$NAME" == "$CURRENT_WORKFLOW_NAME" && "$CURRENT_KEPT" -lt 2 ]]; then
+              CURRENT_KEPT=$((CURRENT_KEPT + 1))
               continue
             fi
+            echo "Deleting obsolete completed run id=$ID name=$NAME"
             gh api --method DELETE "repos/${GITHUB_REPOSITORY}/actions/runs/${ID}" >/dev/null 2>&1 || true
           done
 
-          # Artifacts are transient unless their run is explicitly retained as evidence.
           mapfile -t ARTIFACT_ROWS < <(
             gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" \
               --jq '.artifacts[] | [.id,.workflow_run.id] | @tsv' 2>/dev/null || true
@@ -256,18 +254,17 @@ jobs:
             return 75
           }
 
-          # Prevent an autonomous role from persisting anything itself.
           git config remote.origin.pushurl "https://127.0.0.1/beetlejuice-agent-push-disabled" || true
 
           if ! run_ox ""; then
             git config --unset-all remote.origin.pushurl 2>/dev/null || true
-            echo "::warning::lane=$LANE yielded after bounded Ox failures; sibling lanes may still progress"
-            exit 0
+            echo "::error::lane=$LANE yielded after bounded Ox failures; sibling lanes and integration remain allowed to continue"
+            exit 75
           fi
 
           if [[ "$(git branch --show-current)" != "$BRANCH" ]]; then
-            echo "::warning::lane=$LANE role switched branches unexpectedly; refusing unsafe output"
-            exit 0
+            echo "::error::lane=$LANE role switched branches unexpectedly; refusing unsafe output"
+            exit 66
           fi
           if [[ "$(git rev-parse HEAD)" != "$BASE_SHA" ]]; then
             git reset --mixed "$BASE_SHA"
@@ -289,12 +286,12 @@ jobs:
             echo "::warning::lane=$LANE candidate failed root tests; giving the same specialist one repair pass"
             if ! run_ox "The current lane delta fails the root test suite. Repair your own delta without discarding useful work; run the relevant tests before returning."; then
               git config --unset-all remote.origin.pushurl 2>/dev/null || true
-              echo "::warning::lane=$LANE could not repair its candidate; branch will not be published"
-              exit 0
+              echo "::error::lane=$LANE could not repair its candidate; branch will not be published"
+              exit 75
             fi
             if [[ "$(git branch --show-current)" != "$BRANCH" ]]; then
-              echo "::warning::lane=$LANE changed branch during repair; refusing unsafe output"
-              exit 0
+              echo "::error::lane=$LANE changed branch during repair; refusing unsafe output"
+              exit 66
             fi
             if [[ "$(git rev-parse HEAD)" != "$BASE_SHA" ]]; then
               git reset --mixed "$BASE_SHA"
@@ -303,8 +300,8 @@ jobs:
             npm install --ignore-scripts --no-audit --no-fund --silent
             npm test || {
               git config --unset-all remote.origin.pushurl 2>/dev/null || true
-              echo "::warning::lane=$LANE remains red; branch will not be published"
-              exit 0
+              echo "::error::lane=$LANE remains red; branch will not be published"
+              exit 66
             }
           fi
 
