@@ -36,7 +36,7 @@
     "with_full_billing": "Use the customer's actual model/tool/CI pricing and attributable usage to calculate true local cost/outcome and map dollars onto the architectural inefficiencies.",
     "without_full_billing": "Explain the customer's automation architecture, outcomes and defensible structural inefficiencies; disclose missing monetary evidence."
   },
-  "cycle": 33014153925,
+  "cycle": 33024324209,
   "evidence": {
     "adversarial_audit": "reports/latest-product-audit.md",
     "integration_report": "reports/integration-runtime-status.txt",
@@ -51,7 +51,7 @@
     "p0_pull_request": 1,
     "p0_verified_at_utc": "2026-08-26T12:53:30Z"
   },
-  "last_verified_commit": "c2cd8f593120c9ab36886c52ca75fe02b00748dd",
+  "last_verified_commit": "5a0ce38c5fa0b6002735d1151fc5d7ab053883c0",
   "next_action": "IMPLEMENT_AND_EXECUTE_P0_5_ARCHITECTURE_LEARNING_AND_BILLING_CALIBRATION_GATE_BEFORE_P1",
   "p0_5_checks": {
     "agent_task_model_provenance_confidence": false,
