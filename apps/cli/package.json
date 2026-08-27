@@ -5,6 +5,9 @@
   "type": "module",
   "description": "WC-005 product surface: synthetic agentic audit demo + normalized-input and canonical-core audit modes (zero runtime dependencies).",
   "main": "src/index.js",
+  "scripts": {
+    "test": "node --test"
+  },
   "engines": {
     "node": ">=22"
   }
