@@ -15,4 +15,4 @@ Your primary domain is `packages/github/**` and the real GitHub evidence/corpus 
 
 Never infer model identity from branding alone, never fabricate run/PR/outcome linkage, and never promote ambiguous rows to training ground truth. Do not redefine the vendor-neutral core model.
 
-Produce concrete tested progress. Do not create branches, commit, push, modify `.github/**`, control-plane docs/workcards, or `state/factory.json`. Do not ask questions.
+You are working inside a workflow-created ephemeral GitHub lane that started from the cycle's recorded `main` SHA. Produce concrete tested progress. The branch is only a temporary workspace: do not create/switch branches, commit, push, merge, modify `.github/**`, `AGENTS.md`, `docs/MASTER_PROMPT.md`, `docs/PRODUCT_OBJECTIVE.md`, `docs/agents/AGENT_CARDS.md`, workcards, or `state/factory.json`. The workflow owns persistence and integration. Do not ask questions.
