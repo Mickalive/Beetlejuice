@@ -4,9 +4,11 @@ Every autonomous agent MUST read `AGENTS.md`, `docs/MASTER_PROMPT.md`, `docs/PRO
 
 `docs/MASTER_PROMPT.md` is the binding product constitution. The roles below specialize execution; none may rewrite the product mission, privacy model, architecture-first principle, evidence standards, or milestone ordering.
 
-The repository has ONE GitHub continuation automation and ONE durable source of truth: `main`. Builder roles may run in parallel on workflow-created ephemeral branches that all start from the exact same `main` SHA. Those branches are temporary workspaces only: they never own product state and are deleted after the cycle. Builders do not create, switch, merge, commit or push branches themselves; the workflow owns Git mechanics. `state/factory.json` remains read-only in every builder lane.
+The repository has ONE GitHub continuation automation and ONE durable source of truth: `main`. Builder roles may run in parallel on workflow-created ephemeral branches/worktrees that all start from the exact same `main` SHA. Those workspaces are temporary only: they never own product state and are deleted after the cycle. Builders do not create, switch, merge, commit or push branches themselves; the workflow owns Git mechanics. `state/factory.json` remains read-only in every builder lane.
 
-After the parallel builders finish, `integration_director` combines only the useful lane commits into one temporary integration candidate, resolves conflicts and cross-component failures, and proves the complete test/demo path. `product_auditor` then tries to falsify the resulting candidate. `product_director` alone updates durable product truth in `state/factory.json`. Only after validation + audit + direction does the workflow advance `main`.
+Model routing is also part of the control plane. Build/coding work uses `DeepSeek V4 Flash Free -> North Mini Code Free -> Laguna S 2.1 Free`. Audit/direction uses `Laguna S 2.1 Free -> DeepSeek V4 Flash Free -> MiMo V2.5 Free`. The workflow moves to the next model when the current one fails instead of repeatedly retrying the same failed model. `integration_director` uses the build chain whenever it is resolving or repairing code/tests. No role may silently substitute an unlisted model.
+
+After the parallel builders finish, `integration_director` combines only useful validated lane commits into one temporary integration candidate, resolves conflicts and cross-component failures, and proves the complete test/demo path. `product_auditor` then tries to falsify the resulting candidate. `product_director` alone updates durable product truth in `state/factory.json`. Only after validation + audit + direction does the workflow advance `main`.
 
 <!-- AGENT_CARD: product_director status=ACTIVE -->
 ## product_director
@@ -79,13 +81,14 @@ Must: try to falsify claimed gates; distinguish fixtures from real executed evid
 Must not: reward complexity, accept documentation as runtime proof, mark a gate green merely because unrelated tests pass, update `state/factory.json`, or edit product code/control plane.
 
 ## Shared operating rules
-1. One GitHub workflow orchestrates the entire cycle. No supervisor, no second workflow and no self-dispatch chain.
+1. One GitHub workflow orchestrates the entire cycle. No supervisor and no second workflow. While work remains, the workflow verifies exactly one queued successor run; the cron is a backstop rather than the primary continuation mechanism.
 2. `main` is the only durable product/control state. Every builder lane starts from the exact same recorded base SHA.
-3. Ephemeral branches are isolated workspaces, not authorities. The workflow creates/pushes/deletes them; agents never manage Git topology themselves.
+3. Ephemeral branches/worktrees are isolated workspaces, not authorities. The workflow creates/merges/deletes them; agents never manage Git topology themselves.
 4. Builders run in parallel only where their role domains are independent. They may not update `state/factory.json` or the constitution/control plane.
-5. A failed/zero-delta builder lane does not erase successful sibling lanes. Integration consumes the branches that actually contain validated work.
-6. `integration_director` resolves conflicts and cross-component failures on one temporary candidate; there is no persistent `lab/integration` world.
-7. `product_auditor` falsifies the assembled candidate; `product_director` alone updates durable truth after the audit.
-8. `docs/MASTER_PROMPT.md` outranks role convenience and is restored if any autonomous role attempts to modify it.
-9. Unknown remains unknown. Fixtures/prose never substitute for real-world evidence when the active gate requires it.
-10. The workflow validates before the final `main` push, cleans all ephemeral branches even after failure, and the next scheduled tick re-derives work from `main`.
+5. Build/coding model order is fixed: `opencode/deepseek-v4-flash-free` -> `opencode/north-mini-code-free` -> `opencode/laguna-s-2.1-free`. Review/direction order is fixed: `opencode/laguna-s-2.1-free` -> `opencode/deepseek-v4-flash-free` -> `opencode/mimo-v2.5-free`.
+6. A failed/zero-delta builder lane does not erase successful sibling lanes. Integration consumes the branches that actually contain validated work.
+7. `integration_director` resolves conflicts and cross-component failures on one temporary candidate using the build chain; there is no persistent `lab/integration` world.
+8. `product_auditor` falsifies the assembled candidate; `product_director` alone updates durable truth after the audit.
+9. `docs/MASTER_PROMPT.md` outranks role convenience and is restored if any autonomous role attempts to modify it.
+10. Unknown remains unknown. Fixtures/prose never substitute for real-world evidence when the active gate requires it.
+11. The workflow validates before the final `main` push, cleans all ephemeral workspaces even after failure, and the verified successor re-derives work from durable `main`.
