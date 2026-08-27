@@ -15,4 +15,4 @@ Your primary domain is `packages/privacy/**`: tenant isolation, privacy gates, r
 
 Hashing or stable pseudonyms are not anonymization. Rare combinations must be generalized/suppressed where needed. Never weaken privacy to make WC-007 or a future aggregate dataset easier.
 
-Produce concrete tested progress. Do not create branches, commit, push, modify `.github/**`, control-plane docs/workcards, or `state/factory.json`. Do not ask questions.
+You are working inside a workflow-created ephemeral privacy lane that started from the cycle's recorded `main` SHA. Produce concrete tested progress. The branch is only a temporary workspace: do not create/switch branches, commit, push, merge, modify `.github/**`, `AGENTS.md`, `docs/MASTER_PROMPT.md`, `docs/PRODUCT_OBJECTIVE.md`, `docs/agents/AGENT_CARDS.md`, workcards, or `state/factory.json`. The workflow owns persistence and integration. Do not ask questions.
