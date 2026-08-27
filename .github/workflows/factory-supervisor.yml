@@ -137,13 +137,15 @@ jobs:
 
           echo "Housekeeping complete: deleted_runs=$DELETED_RUNS deleted_artifacts=$DELETED_ARTIFACTS deleted_cycle_branches=$DELETED_BRANCHES"
 
-      - name: Enforce one live factory and verified relaunch
+      - name: Enforce current-head factory and verified relaunch
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
           NOW=$(date +%s)
+          CURRENT_HEAD=$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" --jq '.sha')
+          echo "CURRENT_CONTROL_PLANE_HEAD=$CURRENT_HEAD"
 
           cancel_run() {
             local id="$1" reason="$2"
@@ -159,59 +161,57 @@ jobs:
 
           RUNS=$(load_runs)
 
-          # Control-plane changes invalidate older active factories.
-          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
-            CHANGED=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}" \
-              --jq '.files[]?.filename' 2>/dev/null || true)
-            if grep -Eq '^(\.github/workflows/factory-loop\.yml|\.github/scripts/run-opencode-with-retry\.sh|\.github/workflows/factory-supervisor\.yml)$' <<<"$CHANGED"; then
-              while IFS= read -r RUN_ID; do
-                [[ -n "$RUN_ID" ]] || continue
-                RUN_SHA=$(jq -r --argjson id "$RUN_ID" '.[] | select(.databaseId == $id) | .headSha' <<<"$RUNS")
-                [[ "$RUN_SHA" == "$GITHUB_SHA" ]] || cancel_run "$RUN_ID" "stale control-plane revision $RUN_SHA"
-              done < <(jq -r '.[] | select(.status != "completed") | .databaseId' <<<"$RUNS")
-              sleep 5
-              RUNS=$(load_runs)
+          # Any live factory from an older control-plane is stale in every trigger mode,
+          # not only on a push-triggered supervisor. Request cancellation but never wait
+          # for GitHub's eventually-consistent status before ignoring it.
+          while IFS=$'\t' read -r RUN_ID RUN_SHA; do
+            [[ -n "$RUN_ID" ]] || continue
+            if [[ "$RUN_SHA" != "$CURRENT_HEAD" ]]; then
+              cancel_run "$RUN_ID" "stale control-plane revision $RUN_SHA; current=$CURRENT_HEAD"
             fi
-          fi
+          done < <(jq -r '.[] | select(.status != "completed") | [.databaseId,.headSha] | @tsv' <<<"$RUNS")
 
-          # GitHub-level watchdog for queued starvation and whole-run zombies.
+          # Watchdog applies to current-head candidates only. Stale runs are already dead
+          # for continuity purposes even if the Actions API has not reflected cancellation.
           while IFS=$'\t' read -r RUN_ID RUN_STATUS CREATED_AT; do
             [[ -n "$RUN_ID" ]] || continue
             CREATED_EPOCH=$(date -d "$CREATED_AT" +%s 2>/dev/null || echo "$NOW")
             AGE_MIN=$(( (NOW - CREATED_EPOCH) / 60 ))
             case "$RUN_STATUS" in
               queued|pending|waiting|requested)
-                (( AGE_MIN > 30 )) && cancel_run "$RUN_ID" "queued/pending for ${AGE_MIN}m"
+                (( AGE_MIN > 30 )) && cancel_run "$RUN_ID" "current-head run queued/pending for ${AGE_MIN}m"
                 ;;
               in_progress)
-                (( AGE_MIN > 420 )) && cancel_run "$RUN_ID" "workflow zombie older than ${AGE_MIN}m"
+                (( AGE_MIN > 420 )) && cancel_run "$RUN_ID" "current-head workflow zombie older than ${AGE_MIN}m"
                 ;;
             esac
-          done < <(jq -r '.[] | select(.status != "completed") | [.databaseId,.status,.createdAt] | @tsv' <<<"$RUNS")
+          done < <(jq -r --arg head "$CURRENT_HEAD" '.[] | select(.status != "completed" and .headSha == $head) | [.databaseId,.status,.createdAt] | @tsv' <<<"$RUNS")
 
           sleep 5
           RUNS=$(load_runs)
 
-          # Invariant: at most one live Product Factory. Prefer a currently-running
-          # factory; otherwise keep the oldest queued one and cancel duplicate queue noise.
-          KEEP_ID=$(jq -r '[.[] | select(.status == "in_progress")] | sort_by(.databaseId) | .[0].databaseId // empty' <<<"$RUNS")
+          # Invariant: exactly zero or one current-head Product Factory may be live.
+          # Stale runs are never eligible to be kept, even while cancellation propagates.
+          KEEP_ID=$(jq -r --arg head "$CURRENT_HEAD" '[.[] | select(.status == "in_progress" and .headSha == $head)] | sort_by(.databaseId) | .[0].databaseId // empty' <<<"$RUNS")
           if [[ -z "$KEEP_ID" ]]; then
-            KEEP_ID=$(jq -r '[.[] | select(.status != "completed")] | sort_by(.databaseId) | .[0].databaseId // empty' <<<"$RUNS")
+            KEEP_ID=$(jq -r --arg head "$CURRENT_HEAD" '[.[] | select(.status != "completed" and .headSha == $head)] | sort_by(.databaseId) | .[0].databaseId // empty' <<<"$RUNS")
           fi
+
           if [[ -n "$KEEP_ID" ]]; then
             while IFS= read -r RUN_ID; do
               [[ -n "$RUN_ID" ]] || continue
-              [[ "$RUN_ID" == "$KEEP_ID" ]] || cancel_run "$RUN_ID" "duplicate active factory; keeping $KEEP_ID"
-            done < <(jq -r '.[] | select(.status != "completed") | .databaseId' <<<"$RUNS")
+              [[ "$RUN_ID" == "$KEEP_ID" ]] || cancel_run "$RUN_ID" "duplicate current-head factory; keeping $KEEP_ID"
+            done < <(jq -r --arg head "$CURRENT_HEAD" '.[] | select(.status != "completed" and .headSha == $head) | .databaseId' <<<"$RUNS")
             sleep 5
             RUNS=$(load_runs)
           fi
 
-          ACTIVE=$(jq '[.[] | select(.status != "completed")] | length' <<<"$RUNS")
-          if [[ "$ACTIVE" -gt 0 ]]; then
-            LIVE_ID=$(jq -r '.[] | select(.status != "completed") | .databaseId' <<<"$RUNS" | head -1)
+          CURRENT_ACTIVE=$(jq --arg head "$CURRENT_HEAD" '[.[] | select(.status != "completed" and .headSha == $head)] | length' <<<"$RUNS")
+          if [[ "$CURRENT_ACTIVE" -gt 0 ]]; then
+            LIVE_ID=$(jq -r --arg head "$CURRENT_HEAD" '.[] | select(.status != "completed" and .headSha == $head) | .databaseId' <<<"$RUNS" | head -1)
             LIVE_STATUS=$(jq -r --argjson id "$LIVE_ID" '.[] | select(.databaseId == $id) | .status' <<<"$RUNS")
-            echo "Continuity satisfied: factory $LIVE_ID is $LIVE_STATUS."
+            LIVE_SHA=$(jq -r --argjson id "$LIVE_ID" '.[] | select(.databaseId == $id) | .headSha' <<<"$RUNS")
+            echo "VERIFIED_FACTORY_CONTINUITY run_id=$LIVE_ID status=$LIVE_STATUS head=$LIVE_SHA"
             exit 0
           fi
 
@@ -243,6 +243,8 @@ jobs:
               -f sha="$MAIN_SHA" \
               -f branch=main >/dev/null
             echo "Durable integration state synchronized to main; continuing in this same supervisor invocation."
+            CURRENT_HEAD=$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" --jq '.sha')
+            echo "CURRENT_CONTROL_PLANE_HEAD_AFTER_STATE_SYNC=$CURRENT_HEAD"
           fi
 
           STATE="$MERGED_STATE"
@@ -272,23 +274,25 @@ jobs:
             echo "Overriding non-terminal stop: status=$STATUS continue=$CONTINUE remaining_false_gates=$REMAINING"
           fi
 
-          echo "No live factory exists. Dispatching and VERIFYING relaunch: status=$STATUS remaining_false_gates=$REMAINING next_action=$NEXT_ACTION"
+          echo "No current-head factory exists. Dispatching and VERIFYING relaunch: head=$CURRENT_HEAD status=$STATUS remaining_false_gates=$REMAINING next_action=$NEXT_ACTION"
+          RUNS=$(load_runs)
           BASE_MAX=$(jq '[.[].databaseId] | max // 0' <<<"$RUNS")
           VERIFIED=false
 
           for ATTEMPT in 1 2 3 4 5; do
-            echo "Factory dispatch attempt $ATTEMPT/5 (previous max run id=$BASE_MAX)"
+            echo "Factory dispatch attempt $ATTEMPT/5 (previous max run id=$BASE_MAX head=$CURRENT_HEAD)"
             if gh api --method POST \
               "repos/${GITHUB_REPOSITORY}/actions/workflows/factory-loop.yml/dispatches" \
               -f ref=main >/dev/null 2>&1; then
               for POLL in $(seq 1 12); do
                 sleep 5
                 CHECK=$(load_runs)
-                NEW_ID=$(jq -r --argjson base "$BASE_MAX" '[.[] | select(.databaseId > $base)] | sort_by(.databaseId) | .[0].databaseId // empty' <<<"$CHECK")
+                NEW_ID=$(jq -r --argjson base "$BASE_MAX" --arg head "$CURRENT_HEAD" '[.[] | select(.databaseId > $base and .headSha == $head and .event == "workflow_dispatch")] | sort_by(.databaseId) | .[0].databaseId // empty' <<<"$CHECK")
                 if [[ -n "$NEW_ID" ]]; then
                   NEW_STATUS=$(jq -r --argjson id "$NEW_ID" '.[] | select(.databaseId == $id) | .status' <<<"$CHECK")
                   NEW_EVENT=$(jq -r --argjson id "$NEW_ID" '.[] | select(.databaseId == $id) | .event' <<<"$CHECK")
-                  echo "VERIFIED_FACTORY_RELAUNCH run_id=$NEW_ID status=$NEW_STATUS event=$NEW_EVENT"
+                  NEW_SHA=$(jq -r --argjson id "$NEW_ID" '.[] | select(.databaseId == $id) | .headSha' <<<"$CHECK")
+                  echo "VERIFIED_FACTORY_RELAUNCH run_id=$NEW_ID status=$NEW_STATUS event=$NEW_EVENT head=$NEW_SHA"
                   VERIFIED=true
                   break 2
                 fi
@@ -298,6 +302,6 @@ jobs:
           done
 
           if [[ "$VERIFIED" != true ]]; then
-            echo "::error::FACTORY_RELAUNCH_NOT_VERIFIED after 5 dispatch attempts. Failing supervisor so the 5-minute heartbeat retries visibly."
+            echo "::error::FACTORY_RELAUNCH_NOT_VERIFIED after 5 dispatch attempts for head=$CURRENT_HEAD. Failing supervisor so the 5-minute heartbeat retries visibly."
             exit 1
           fi
