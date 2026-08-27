@@ -1,4 +1,4 @@
-name: BEETLEJUICE Autonomous Continuation
+name: BEETLEJUICE Parallel Factory
 
 on:
   workflow_dispatch:
@@ -7,102 +7,186 @@ on:
   push:
     branches: [main]
     paths:
-      - '.github/workflows/factory-loop.yml'
-      - 'docs/MASTER_PROMPT.md'
-      - 'docs/PRODUCT_OBJECTIVE.md'
-      - 'docs/agents/AGENT_CARDS.md'
-      - 'docs/workcards/**'
-      - '.opencode/agents/**'
+      - ".github/workflows/factory-loop.yml"
+      - "AGENTS.md"
+      - "docs/MASTER_PROMPT.md"
+      - "docs/MASTER_PROMPT_ORIGINAL_FR.md"
+      - "docs/PRODUCT_OBJECTIVE.md"
+      - "docs/agents/AGENT_CARDS.md"
+      - "docs/workcards/**"
+      - ".opencode/agents/**"
 
 permissions:
   contents: write
   actions: write
 
 concurrency:
-  group: beetlejuice-autonomous-continuation
+  group: beetlejuice-single-factory
   cancel-in-progress: ${{ github.event_name == 'push' }}
 
-jobs:
-  continue-product:
-    name: Continue Beetlejuice product
-    runs-on: ubuntu-latest
-    timeout-minutes: 55
+env:
+  OX_MODEL: opencode/x-preview-f-free
 
+jobs:
+  prepare:
+    name: PREPARE — durable truth + cleanup
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      terminal: ${{ steps.state.outputs.terminal }}
+      base_sha: ${{ steps.state.outputs.base_sha }}
     steps:
-      - name: Checkout the only durable product branch
+      - name: Checkout durable main
         uses: actions/checkout@v6
         with:
           ref: main
           fetch-depth: 0
 
-      - name: Use Node 24
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-
-      - name: Configure durable writer
-        shell: bash
-        run: |
-          git config user.name "beetlejuice-autonomous-factory"
-          git config user.email "beetlejuice-autonomous@users.noreply.github.com"
-
-      - name: Remove obsolete orchestration debris
+      - name: Clean obsolete orchestration and derive base state
+        id: state
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          set -u
-          mapfile -t OLD_REFS < <(
-            gh api --paginate "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/cycle/" --jq '.[].ref' 2>/dev/null || true
-          )
-          for REF in "${OLD_REFS[@]}"; do
-            SHORT=${REF#refs/heads/}
-            gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${SHORT}" >/dev/null 2>&1 || true
+          set -euo pipefail
+
+          mapfile -t WORKFLOW_FILES < <(find .github/workflows -maxdepth 1 -type f -printf '%f\n' | sort)
+          if [[ "${#WORKFLOW_FILES[@]}" -ne 1 || "${WORKFLOW_FILES[0]}" != "factory-loop.yml" ]]; then
+            echo "::error::Unexpected workflow file set: ${WORKFLOW_FILES[*]}"
+            exit 64
+          fi
+
+          # No old branch is recovery state. A new cycle always derives from main.
+          for PREFIX in "factory/" "cycle/"; do
+            mapfile -t REFS < <(
+              gh api --paginate "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${PREFIX}" \
+                --jq '.[].ref' 2>/dev/null || true
+            )
+            for REF in "${REFS[@]}"; do
+              SHORT=${REF#refs/heads/}
+              gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${SHORT}" >/dev/null 2>&1 || true
+            done
           done
           gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/lab/integration" >/dev/null 2>&1 || true
 
+          # Anything else still alive is obsolete orchestration. This workflow is
+          # protected by its single concurrency group and never cancels itself.
+          mapfile -t LIVE_RUNS < <(
+            gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs?per_page=100" \
+              --jq '.workflow_runs[] | select(.status != "completed") | [.id,.name,.status] | @tsv' 2>/dev/null || true
+          )
+          for ROW in "${LIVE_RUNS[@]}"; do
+            IFS=$'\t' read -r ID NAME STATUS <<<"$ROW"
+            [[ "$ID" == "$GITHUB_RUN_ID" ]] && continue
+            echo "Cancelling stale run id=$ID name=$NAME status=$STATUS"
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${ID}/cancel" >/dev/null 2>&1 || true
+            sleep 1
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${ID}/force-cancel" >/dev/null 2>&1 || true
+          done
+
+          # Preserve evidence run IDs referenced by durable state; keep only the
+          # newest completed run per historical workflow name otherwise.
           PRESERVE=$(jq -r '.. | objects | to_entries[]? | select(.key | test("run_id$")) | .value | select(type == "number")' state/factory.json 2>/dev/null | sort -u || true)
           mapfile -t RUN_ROWS < <(
             gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs?per_page=100" \
-              --jq '.workflow_runs[] | [.id,.name,.status,.created_at] | @tsv' 2>/dev/null || true
+              --jq '.workflow_runs[] | select(.status == "completed") | [.id,.name,.created_at] | @tsv' 2>/dev/null || true
           )
           declare -A KEPT=()
           for ROW in "${RUN_ROWS[@]}"; do
-            IFS=$'\t' read -r ID NAME STATUS CREATED <<<"$ROW"
+            IFS=$'\t' read -r ID NAME CREATED <<<"$ROW"
             [[ "$ID" == "$GITHUB_RUN_ID" ]] && continue
-            [[ "$STATUS" == "completed" ]] || continue
             grep -qx "$ID" <<<"$PRESERVE" 2>/dev/null && continue
             COUNT=${KEPT["$NAME"]:-0}
-            if (( COUNT < 2 )); then
+            if (( COUNT < 1 )); then
               KEPT["$NAME"]=$((COUNT + 1))
               continue
             fi
             gh api --method DELETE "repos/${GITHUB_REPOSITORY}/actions/runs/${ID}" >/dev/null 2>&1 || true
           done
-          echo "OBSOLETE_ORCHESTRATION_CLEANUP_DONE"
 
-      - name: Stop immediately only for a genuinely terminal product
-        id: terminal
-        shell: bash
-        run: |
-          set -euo pipefail
+          # Artifacts are transient unless their run is explicitly retained as evidence.
+          mapfile -t ARTIFACT_ROWS < <(
+            gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" \
+              --jq '.artifacts[] | [.id,.workflow_run.id] | @tsv' 2>/dev/null || true
+          )
+          for ROW in "${ARTIFACT_ROWS[@]}"; do
+            IFS=$'\t' read -r ARTIFACT_ID RUN_ID <<<"$ROW"
+            [[ "$RUN_ID" == "$GITHUB_RUN_ID" ]] && continue
+            grep -qx "$RUN_ID" <<<"$PRESERVE" 2>/dev/null && continue
+            gh api --method DELETE "repos/${GITHUB_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}" >/dev/null 2>&1 || true
+          done
+
+          BASE_SHA=$(git rev-parse HEAD)
           STATUS=$(jq -r '.status // "BUILDING"' state/factory.json)
           CONTINUE=$(jq -r '.continue // true' state/factory.json)
+          TERMINAL_READY=$(jq -r '.terminal_ready // false' state/factory.json)
           CHECK_GROUPS=$(jq '[to_entries[] | select(.key | endswith("_checks")) | select(.value | type == "object")] | length' state/factory.json)
-          FALSE=$(jq '[to_entries[] | select(.key | endswith("_checks")) | select(.value | type == "object") | .value | to_entries[] | select(.value == false)] | length' state/factory.json)
-          if [[ "$STATUS" == "COMPLETE" && "$CONTINUE" == "false" && "$CHECK_GROUPS" -gt 0 && "$FALSE" -eq 0 ]]; then
+          FALSE_GATES=$(jq '[to_entries[] | select(.key | endswith("_checks")) | select(.value | type == "object") | .value | to_entries[] | select(.value == false)] | length' state/factory.json)
+
+          echo "base_sha=$BASE_SHA" >> "$GITHUB_OUTPUT"
+          if [[ "$STATUS" == "COMPLETE" && "$CONTINUE" == "false" && "$TERMINAL_READY" == "true" && "$CHECK_GROUPS" -gt 0 && "$FALSE_GATES" -eq 0 ]]; then
             echo "terminal=true" >> "$GITHUB_OUTPUT"
-            echo "BEETLEJUICE_TERMINAL_STATE_VERIFIED"
+            echo "BEETLEJUICE_TERMINAL_STATE_VERIFIED base=$BASE_SHA"
           else
             echo "terminal=false" >> "$GITHUB_OUTPUT"
-            echo "BEETLEJUICE_CONTINUES status=$STATUS false_gates=$FALSE"
+            echo "BEETLEJUICE_CONTINUES base=$BASE_SHA status=$STATUS false_gates=$FALSE_GATES"
           fi
 
-      - name: Install OpenCode
-        if: steps.terminal.outputs.terminal != 'true'
+  lanes:
+    name: LANE — ${{ matrix.lane }}
+    needs: prepare
+    if: ${{ needs.prepare.outputs.terminal != 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 28
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        include:
+          - lane: core
+            agent: core_builder
+            mission: >-
+              Advance the highest-value unfinished core/domain-model work implied by durable state and the MASTER_PROMPT.
+              For P0.5 prioritize canonical automation-architecture topology/policy, provenance/confidence, structural-waste precision,
+              determinism, falsifiable architecture-learning variables and the later-billing attachment seam.
+          - lane: github
+            agent: github_builder
+            mission: >-
+              Advance the highest-value unfinished real-GitHub evidence work. For WC-007 prioritize a high-identifiability primary corpus,
+              defensible agent/model/task/outcome provenance, real HTTPS ingestion, architecture reconstruction, pagination/rate-limit/network
+              robustness and safe abstention on ambiguity.
+          - lane: privacy
+            agent: privacy_builder
+            mission: >-
+              Advance the highest-value unfinished privacy boundary work, especially unlinkable-by-default architecture-learning export,
+              rare-combination/re-identification defense, tenant isolation and privacy-safe later economic labels.
+          - lane: product
+            agent: product_builder
+            mission: >-
+              Advance the highest-value unfinished user-facing product/report capability. Preserve synthetic demo usability while making
+              real architecture/outcome/waste/evidence completeness useful without fake monetary totals.
+
+    steps:
+      - name: Checkout the exact shared base
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.base_sha }}
+          fetch-depth: 0
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Configure lane and install OpenCode
         shell: bash
         run: |
           set -euo pipefail
+          git config user.name "beetlejuice-${{ matrix.lane }}-lane"
+          git config user.email "beetlejuice-autonomous@users.noreply.github.com"
+          BRANCH="factory/${GITHUB_RUN_ID}/${{ matrix.lane }}"
+          git checkout -B "$BRANCH" "${{ needs.prepare.outputs.base_sha }}"
           for ATTEMPT in 1 2 3; do
             if curl -fsSL https://opencode.ai/install | bash; then
               echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
@@ -111,115 +195,263 @@ jobs:
             fi
             sleep $((ATTEMPT * 10))
           done
-          echo "::error::OpenCode installation unavailable; next scheduled tick will retry."
+          echo "::error::OpenCode install unavailable in lane=${{ matrix.lane }}"
           exit 70
 
-      - name: Specialist → integration → validation → persistence
-        if: steps.terminal.outputs.terminal != 'true'
+      - name: Build isolated lane
         env:
           GH_TOKEN: ${{ github.token }}
-          OX_MODEL: opencode/x-preview-f-free
+          BASE_SHA: ${{ needs.prepare.outputs.base_sha }}
+          LANE: ${{ matrix.lane }}
+          ROLE: ${{ matrix.agent }}
+          MISSION: ${{ matrix.mission }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          OPENCODE="$HOME/.opencode/bin/opencode"
+          BRANCH="factory/${GITHUB_RUN_ID}/${LANE}"
+
+          protect_control_plane() {
+            git restore --source="$BASE_SHA" --staged --worktree -- \
+              .github \
+              .opencode/agents \
+              AGENTS.md \
+              docs/MASTER_PROMPT.md \
+              docs/MASTER_PROMPT_ORIGINAL_FR.md \
+              docs/PRODUCT_OBJECTIVE.md \
+              docs/agents \
+              docs/workcards \
+              state/factory.json 2>/dev/null || true
+            git clean -fd -- .github .opencode/agents docs/agents docs/workcards >/dev/null 2>&1 || true
+          }
+
+          run_ox() {
+            local EXTRA="$1"
+            for ATTEMPT in 1 2; do
+              echo "OX_ATTEMPT lane=$LANE role=$ROLE attempt=$ATTEMPT/2"
+              set +e
+              timeout 7m "$OPENCODE" run --model "$OX_MODEL" --agent "$ROLE" "$(cat <<EOF
+          Read AGENTS.md, docs/MASTER_PROMPT.md, docs/MASTER_PROMPT_ORIGINAL_FR.md, docs/PRODUCT_OBJECTIVE.md,
+          docs/agents/AGENT_CARDS.md, active workcards, state/factory.json, reports, tests and implementation before acting.
+          The MASTER_PROMPT is binding.
+
+          You are $ROLE inside the workflow-created ephemeral $LANE lane. All builder lanes started from exactly the same
+          durable main SHA: $BASE_SHA. This branch is disposable workspace, never product truth.
+
+          Mission: $MISSION
+          $EXTRA
+
+          Produce concrete tested implementation/evidence progress in your canonical role domain. Do not manage Git topology:
+          do not create/switch branches, commit, merge or push. Do not edit .github/**, .opencode/agents/**, AGENTS.md,
+          MASTER_PROMPT files, PRODUCT_OBJECTIVE, AGENT_CARDS, workcards, or state/factory.json. Do not ask questions.
+          If your first approach yields no useful delta, change strategy within this invocation.
+          EOF
+          )"
+              RC=$?
+              set -e
+              [[ "$RC" -eq 0 ]] && return 0
+              echo "::warning::Ox failed lane=$LANE role=$ROLE rc=$RC"
+              sleep 15
+            done
+            return 75
+          }
+
+          # Prevent an autonomous role from persisting anything itself.
+          git config remote.origin.pushurl "https://127.0.0.1/beetlejuice-agent-push-disabled" || true
+
+          if ! run_ox ""; then
+            git config --unset-all remote.origin.pushurl 2>/dev/null || true
+            echo "::warning::lane=$LANE yielded after bounded Ox failures; sibling lanes may still progress"
+            exit 0
+          fi
+
+          if [[ "$(git branch --show-current)" != "$BRANCH" ]]; then
+            echo "::warning::lane=$LANE role switched branches unexpectedly; refusing unsafe output"
+            exit 0
+          fi
+          if [[ "$(git rev-parse HEAD)" != "$BASE_SHA" ]]; then
+            git reset --mixed "$BASE_SHA"
+          fi
+          protect_control_plane
+
+          if [[ -z "$(git status --porcelain)" ]]; then
+            echo "::warning::lane=$LANE returned zero durable delta"
+            exit 0
+          fi
+
+          npm install --ignore-scripts --no-audit --no-fund --silent
+          set +e
+          npm test
+          TEST_RC=$?
+          set -e
+
+          if [[ "$TEST_RC" -ne 0 ]]; then
+            echo "::warning::lane=$LANE candidate failed root tests; giving the same specialist one repair pass"
+            if ! run_ox "The current lane delta fails the root test suite. Repair your own delta without discarding useful work; run the relevant tests before returning."; then
+              git config --unset-all remote.origin.pushurl 2>/dev/null || true
+              echo "::warning::lane=$LANE could not repair its candidate; branch will not be published"
+              exit 0
+            fi
+            if [[ "$(git branch --show-current)" != "$BRANCH" ]]; then
+              echo "::warning::lane=$LANE changed branch during repair; refusing unsafe output"
+              exit 0
+            fi
+            if [[ "$(git rev-parse HEAD)" != "$BASE_SHA" ]]; then
+              git reset --mixed "$BASE_SHA"
+            fi
+            protect_control_plane
+            npm install --ignore-scripts --no-audit --no-fund --silent
+            npm test || {
+              git config --unset-all remote.origin.pushurl 2>/dev/null || true
+              echo "::warning::lane=$LANE remains red; branch will not be published"
+              exit 0
+            }
+          fi
+
+          git add -A
+          if git diff --cached --quiet; then
+            echo "::warning::lane=$LANE has no validated committable delta"
+            exit 0
+          fi
+
+          git commit -m "factory(${LANE}): validated lane ${GITHUB_RUN_ID}"
+          git config --unset-all remote.origin.pushurl 2>/dev/null || true
+          git push origin "HEAD:refs/heads/${BRANCH}"
+          echo "LANE_PUBLISHED lane=$LANE branch=$BRANCH head=$(git rev-parse HEAD)"
+
+  integrate_audit_direct:
+    name: INTEGRATE → TEST → AUDIT → DIRECT
+    needs: [prepare, lanes]
+    if: ${{ always() && needs.prepare.outputs.terminal != 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    env:
+      BASE_SHA: ${{ needs.prepare.outputs.base_sha }}
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Checkout the same cycle base
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.base_sha }}
+          fetch-depth: 0
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Configure integration candidate and OpenCode
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "beetlejuice-integration"
+          git config user.email "beetlejuice-autonomous@users.noreply.github.com"
+          git checkout -B "factory/${GITHUB_RUN_ID}/integration" "$BASE_SHA"
+          for ATTEMPT in 1 2 3; do
+            if curl -fsSL https://opencode.ai/install | bash; then
+              echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
+              "$HOME/.opencode/bin/opencode" --version
+              exit 0
+            fi
+            sleep $((ATTEMPT * 10))
+          done
+          echo "::error::OpenCode installation unavailable during integration"
+          exit 70
+
+      - name: Merge useful lane outputs
         shell: bash
         run: |
           set -euo pipefail
           OPENCODE="$HOME/.opencode/bin/opencode"
 
-          protect_constitution() {
-            git restore --source=HEAD --staged --worktree -- \
+          protect_constitution_and_state() {
+            git restore --source="$BASE_SHA" --staged --worktree -- \
               .github \
+              .opencode/agents \
               AGENTS.md \
               docs/MASTER_PROMPT.md \
+              docs/MASTER_PROMPT_ORIGINAL_FR.md \
               docs/PRODUCT_OBJECTIVE.md \
-              docs/agents/AGENT_CARDS.md \
-              docs/workcards 2>/dev/null || true
+              docs/agents \
+              docs/workcards \
+              state/factory.json 2>/dev/null || true
+            git clean -fd -- .github .opencode/agents docs/agents docs/workcards >/dev/null 2>&1 || true
           }
 
-          run_role() {
-            local ROLE="$1"
-            local MISSION="$2"
-            echo "===== ROLE: $ROLE ====="
-            set +e
-            timeout 8m "$OPENCODE" run --model "$OX_MODEL" --agent "$ROLE" "$(cat <<EOF
-          Read AGENTS.md, docs/MASTER_PROMPT.md, docs/PRODUCT_OBJECTIVE.md, docs/agents/AGENT_CARDS.md, all active workcards, state/factory.json, current reports, tests and implementation before acting. The MASTER_PROMPT is binding.
+          run_integrator() {
+            local MISSION="$1"
+            for ATTEMPT in 1 2; do
+              echo "OX_ATTEMPT role=integration_director attempt=$ATTEMPT/2"
+              set +e
+              timeout 8m "$OPENCODE" run --model "$OX_MODEL" --agent integration_director "$(cat <<EOF
+          Read AGENTS.md, docs/MASTER_PROMPT.md, docs/PRODUCT_OBJECTIVE.md, docs/agents/AGENT_CARDS.md,
+          active workcards, state/factory.json, reports, tests and the current integration worktree. The MASTER_PROMPT is binding.
 
-          You are running as role: $ROLE.
-          Mission for this invocation: $MISSION
+          You are the integration_director on the workflow-created temporary integration candidate for run $GITHUB_RUN_ID.
+          Independent lane outputs all originated at base $BASE_SHA. There is no persistent integration state.
 
-          Work on the checked-out main candidate. Do not create/switch branches. Do not git commit/push. Do not modify .github/**, AGENTS.md, MASTER_PROMPT, PRODUCT_OBJECTIVE, AGENT_CARDS or workcards. Treat state/factory.json as read-only unless you are product_director. Respect your canonical role card and owned domain.
+          Mission: $MISSION
 
-          P0 is established. WC-007/P0.5 real-world architecture-learning evidence outranks P1 until executed evidence closes it. Architecture is the primary learned object; billing is a local calibration/economic-label layer. Unknown remains unknown. Fixtures/prose do not satisfy real-world gates.
-
-          Produce the highest-value concrete, tested, durable progress available to your role. If the first approach yields no delta, change strategy within this invocation. Do not ask questions.
+          Preserve compatible useful lane work and resolve conflicts semantically. Do not create/switch branches, commit or push.
+          Do not edit .github/**, .opencode/agents/**, AGENTS.md, MASTER_PROMPT files, PRODUCT_OBJECTIVE, AGENT_CARDS,
+          workcards, or state/factory.json. Do not declare milestones complete. Do not ask questions.
           EOF
           )"
-            RC=$?
+              RC=$?
+              set -e
+              [[ "$RC" -eq 0 ]] && return 0
+              echo "::warning::integration_director Ox attempt failed rc=$RC"
+              sleep 15
+            done
+            return 75
+          }
+
+          MERGED=0
+          for LANE in core github privacy product; do
+            BRANCH="factory/${GITHUB_RUN_ID}/${LANE}"
+            if ! git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+              echo "LANE_ABSENT lane=$LANE"
+              continue
+            fi
+
+            git fetch origin "refs/heads/${BRANCH}:refs/remotes/origin/${BRANCH}"
+            echo "MERGING_LANE lane=$LANE branch=$BRANCH"
+            set +e
+            git merge --no-ff --no-edit "origin/${BRANCH}"
+            MERGE_RC=$?
             set -e
-            protect_constitution
-            if [[ "$RC" -ne 0 ]]; then
-              echo "::error::Ox role $ROLE failed/stalled rc=$RC. No alternate model is used. Next scheduled tick will retry from durable main."
-              exit 75
+
+            if [[ "$MERGE_RC" -ne 0 ]]; then
+              echo "::warning::merge conflict from lane=$LANE; invoking integration_director"
+              if ! run_integrator "Resolve the current Git merge conflict for lane '$LANE'. Preserve the independent intent of already integrated work and this lane. Remove all conflict markers and leave a coherent worktree ready for the workflow to complete the merge."; then
+                git merge --abort >/dev/null 2>&1 || true
+                echo "::warning::lane=$LANE could not be integrated; skipping it without discarding prior successful lanes"
+                continue
+              fi
+              protect_constitution_and_state
+              if [[ -n "$(git diff --name-only --diff-filter=U)" ]]; then
+                git merge --abort >/dev/null 2>&1 || true
+                echo "::warning::lane=$LANE still has unresolved conflicts; skipped"
+                continue
+              fi
+              git add -A
+              if git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
+                GIT_EDITOR=true git commit --no-edit
+              fi
             fi
-          }
 
-          has_false() {
-            local KEYS="$1"
-            jq -e --argjson keys "$KEYS" '.p0_5_checks as $c | any($keys[]; ($c[.] // false) == false)' state/factory.json >/dev/null 2>&1
-          }
-
-          ROLE_QUEUE=()
-          CORE_KEYS='["architecture_schema_topology_policy_representation","architecture_learning_hypotheses_falsifiable","certain_structural_waste_precision_review","determinism_on_frozen_real_evidence","billing_no_evidence_honesty_and_architecture_utility","billing_partial_evidence_honesty","billing_complete_evidence_accounting","local_real_billing_attachable_without_schema_redesign","economic_or_learnable_corpus_path_proven"]'
-          GITHUB_KEYS='["identifiable_primary_corpus_5_plus","secondary_messy_robustness_set","agent_task_model_provenance_confidence","architecture_reconstruction_manual_ground_truth","zero_crash_or_typed_refusal","pagination_large_history","rate_limit_network_adversarial","classification_manual_ground_truth","outcome_manual_ground_truth","real_github_https_positive_path"]'
-          PRIVACY_KEYS='["privacy_safe_global_architecture_export","privacy_boundaries_preserved"]'
-          PRODUCT_KEYS='["real_world_report_persisted"]'
-          INTEGRATION_KEYS='["integration_ci_green_after_repairs"]'
-
-          has_false "$CORE_KEYS" && ROLE_QUEUE+=(core_builder)
-          has_false "$GITHUB_KEYS" && ROLE_QUEUE+=(github_builder)
-          has_false "$PRIVACY_KEYS" && ROLE_QUEUE+=(privacy_builder)
-          has_false "$PRODUCT_KEYS" && ROLE_QUEUE+=(product_builder)
-          has_false "$INTEGRATION_KEYS" && ROLE_QUEUE+=(integration_director)
-
-          if [[ "${#ROLE_QUEUE[@]}" -eq 0 ]]; then
-            NEXT=$(jq -r '.next_action // "CONTINUE_PRODUCT"' state/factory.json)
-            case "$NEXT" in
-              *GITHUB*|*APP*|*WEBHOOK*|*INGEST*) ROLE_QUEUE=(github_builder product_builder) ;;
-              *PRIVACY*) ROLE_QUEUE=(privacy_builder product_builder) ;;
-              *ARCHITECT*|*SCHEMA*|*CORE*|*BILLING*) ROLE_QUEUE=(core_builder product_builder) ;;
-              *) ROLE_QUEUE=(product_builder github_builder) ;;
-            esac
-          fi
-
-          BEFORE=$(git status --porcelain)
-          SPECIALIST_PROGRESS=false
-          ATTEMPTED=0
-          for ROLE in "${ROLE_QUEUE[@]}"; do
-            ATTEMPTED=$((ATTEMPTED + 1))
-            case "$ROLE" in
-              core_builder) MISSION="Advance the highest-priority unfinished canonical architecture/schema/structural-waste/billing-seam evidence required by the active gate." ;;
-              github_builder) MISSION="Advance WC-007 using real high-identifiability GitHub evidence: corpus/provenance/topology/outcome/robustness/real-HTTPS work, not arbitrary repo volume." ;;
-              privacy_builder) MISSION="Advance executable unlinkable-by-default architecture export and privacy/re-identification gates required by the active milestone." ;;
-              product_builder) MISSION="Advance the smallest real product/report surface that exposes architecture/outcome/waste/evidence honestly and persists required real-world evidence." ;;
-              integration_director) MISSION="Repair cross-component seams and make the complete product test/demo path green on this same main candidate." ;;
-            esac
-            run_role "$ROLE" "$MISSION"
-
-            CURRENT=$(git status --porcelain)
-            if [[ -n "$CURRENT" && "$CURRENT" != "$BEFORE" ]]; then
-              SPECIALIST_PROGRESS=true
-              break
-            fi
-            echo "::warning::$ROLE returned zero durable delta; trying a different canonical role instead of spinning."
-            [[ "$ATTEMPTED" -ge 2 ]] && break
+            MERGED=$((MERGED + 1))
           done
 
-          if [[ "$SPECIALIST_PROGRESS" != true ]]; then
-            echo "::error::Two role strategies produced no durable delta. Next tick will re-read durable state rather than fabricate progress."
-            exit 67
+          if (( MERGED == 0 )); then
+            echo "::error::No validated lane branch was available. The next scheduled tick will retry from durable main."
+            exit 75
           fi
 
-          git restore --source=HEAD --staged --worktree state/factory.json 2>/dev/null || true
+          protect_constitution_and_state
+          echo "MERGED_LANES=$MERGED"
 
-          echo "===== FULL PRODUCT VALIDATION ====="
           npm install --ignore-scripts --no-audit --no-fund --silent
           set +e
           npm test
@@ -229,132 +461,178 @@ jobs:
           set -e
 
           if [[ "$TEST_RC" -ne 0 || "$DEMO_RC" -ne 0 ]]; then
-            run_role integration_director "The current specialist delta is not fully green (test=$TEST_RC demo=$DEMO_RC). Repair the actual cross-component failure without discarding useful work, then run the complete test/demo path."
-            git restore --source=HEAD --staged --worktree state/factory.json 2>/dev/null || true
+            echo "::warning::assembled candidate is red; invoking integration_director repair"
+            run_integrator "The assembled candidate fails the full validation path (npm test rc=$TEST_RC, npm run demo rc=$DEMO_RC). Diagnose and repair the actual cross-component failures while preserving useful lane work. Run the complete validation yourself before returning." || exit 75
+            protect_constitution_and_state
             npm install --ignore-scripts --no-audit --no-fund --silent
             npm test
             npm run demo
           fi
 
-          protect_constitution
-          git add -A
-          if git diff --cached --quiet; then
-            echo "::error::Validated work disappeared after constitution/state protection; refusing fake progress."
-            exit 66
+          protect_constitution_and_state
+          if [[ -n "$(git status --porcelain)" ]]; then
+            git add -A
+            git commit -m "factory: integration repairs ${GITHUB_RUN_ID}"
           fi
-          git commit -m "factory: autonomous specialist progress ${GITHUB_RUN_ID}"
-          git pull --rebase origin main
-          git push origin HEAD:main
-          echo "SPECIALIST_PROGRESS_PERSISTED head=$(git rev-parse HEAD)"
+          echo "INTEGRATION_CANDIDATE_GREEN head=$(git rev-parse HEAD)"
 
-      - name: Adversarial audit on persisted candidate
-        if: steps.terminal.outputs.terminal != 'true'
-        env:
-          OX_MODEL: opencode/x-preview-f-free
+      - name: Adversarial product audit
         shell: bash
         run: |
           set -euo pipefail
-          git fetch origin main
-          git reset --hard origin/main
           OPENCODE="$HOME/.opencode/bin/opencode"
 
-          set +e
-          timeout 8m "$OPENCODE" run --model "$OX_MODEL" --agent product_auditor "$(cat <<'EOF'
-          Read AGENTS.md, docs/MASTER_PROMPT.md, docs/PRODUCT_OBJECTIVE.md, docs/agents/AGENT_CARDS.md, active workcards including WC-007, state/factory.json, actual code/tests and existing reports. The MASTER_PROMPT is binding.
+          run_auditor() {
+            for ATTEMPT in 1 2; do
+              echo "OX_ATTEMPT role=product_auditor attempt=$ATTEMPT/2"
+              set +e
+              timeout 8m "$OPENCODE" run --model "$OX_MODEL" --agent product_auditor "$(cat <<EOF
+          Read AGENTS.md, docs/MASTER_PROMPT.md, docs/PRODUCT_OBJECTIVE.md, docs/agents/AGENT_CARDS.md,
+          all active workcards including WC-007, state/factory.json, actual code/tests and reports. The MASTER_PROMPT is binding.
 
-          Adversarially audit the current persisted main candidate. Try to falsify active gate claims. Distinguish fixtures from executed real-world evidence. For WC-007, challenge corpus identifiability, architecture reconstruction, outcome attribution, every 'certain' waste claim, billing-evidence honesty, privacy, determinism, pagination/network behavior and real HTTPS evidence. Write/update the appropriate report(s) under reports/. Do not modify product code, state, control-plane docs or workflows. Do not commit/push. Do not ask questions.
+          Audit the assembled integration candidate for run $GITHUB_RUN_ID before main advances. Try to falsify the active gate claims.
+          Distinguish fixtures/prose from executed real-world evidence. Challenge corpus identifiability, architecture reconstruction,
+          model/task/outcome provenance, every 'certain' structural-waste claim, billing-evidence honesty, privacy, determinism,
+          pagination/network behavior and real HTTPS evidence.
+
+          Write/update audit evidence under reports/** only. Do not edit product code, state, control-plane docs or workflows.
+          Do not manage branches, commit or push. Do not ask questions.
           EOF
           )"
-          RC=$?
-          set -e
-          if [[ "$RC" -ne 0 ]]; then
-            echo "::error::Ox auditor failed/stalled rc=$RC. Specialist progress is already durable; next tick will retry audit."
-            exit 75
-          fi
+              RC=$?
+              set -e
+              [[ "$RC" -eq 0 ]] && return 0
+              sleep 15
+            done
+            return 75
+          }
 
-          BAD=$(git status --porcelain | awk '{print $2}' | grep -v '^reports/' || true)
-          if [[ -n "$BAD" ]]; then
-            echo "::warning::Auditor attempted out-of-role edits; restoring them:"
-            echo "$BAD"
-            git restore --source=HEAD --staged --worktree -- . ':!reports' 2>/dev/null || true
-            git clean -fd -e reports/ >/dev/null 2>&1 || true
-          fi
+          run_auditor || {
+            echo "::error::Auditor unavailable after bounded Ox retries; refusing unaudited main advance"
+            exit 75
+          }
+
+          mapfile -d '' BAD_TRACKED < <(git diff --name-only -z -- . ':!reports/**')
+          for FILE in "${BAD_TRACKED[@]}"; do
+            git restore --staged --worktree -- "$FILE" 2>/dev/null || true
+          done
+          while IFS= read -r -d '' FILE; do
+            case "$FILE" in
+              reports/*) ;;
+              *) rm -rf -- "$FILE" ;;
+            esac
+          done < <(git ls-files --others --exclude-standard -z)
 
           git add reports 2>/dev/null || true
           if ! git diff --cached --quiet; then
             git commit -m "factory: adversarial audit ${GITHUB_RUN_ID}"
-            git pull --rebase origin main
-            git push origin HEAD:main
-            echo "AUDIT_PERSISTED head=$(git rev-parse HEAD)"
-          else
-            echo "AUDIT_ZERO_DELTA"
           fi
+          echo "AUDIT_COMPLETE head=$(git rev-parse HEAD)"
 
       - name: Product Director updates durable truth
-        if: steps.terminal.outputs.terminal != 'true'
-        env:
-          OX_MODEL: opencode/x-preview-f-free
         shell: bash
         run: |
           set -euo pipefail
-          git fetch origin main
-          git reset --hard origin/main
           OPENCODE="$HOME/.opencode/bin/opencode"
 
-          set +e
-          timeout 8m "$OPENCODE" run --model "$OX_MODEL" --agent product_director "$(cat <<'EOF'
-          Read the binding docs/MASTER_PROMPT.md first, then AGENTS.md, docs/PRODUCT_OBJECTIVE.md, docs/agents/AGENT_CARDS.md, every active workcard, state/factory.json, persisted reports, actual code and executed tests/evidence.
+          run_director() {
+            for ATTEMPT in 1 2; do
+              echo "OX_ATTEMPT role=product_director attempt=$ATTEMPT/2"
+              set +e
+              timeout 8m "$OPENCODE" run --model "$OX_MODEL" --agent product_director "$(cat <<EOF
+          Read docs/MASTER_PROMPT.md first, then AGENTS.md, docs/PRODUCT_OBJECTIVE.md, docs/agents/AGENT_CARDS.md,
+          all active workcards, state/factory.json, the assembled candidate, executed tests and the adversarial audit.
 
-          Act only as final Product Director. Evaluate what is genuinely proven now and update state/factory.json accordingly. P0 is established. WC-007/P0.5 stays before P1 until its required real-world architecture-learning evidence is actually defensible. Keep unknowns unknown. Fixtures/prose cannot close real-world gates. Keep continue=true while any declared repo-local work remains. COMPLETE/continue=false is allowed only when every declared check group is true and the MASTER_PROMPT terminal product requirements are actually satisfied.
+          You are the final Product Director for run $GITHUB_RUN_ID. Update state/factory.json only from evidence genuinely present
+          in this candidate and its audit. P0 is established. WC-007/P0.5 stays before P1 until its real-world architecture-learning
+          evidence is actually defensible. Unknown remains unknown. Fixtures/prose cannot close real-world gates.
 
-          Update state/factory.json only. Do not modify product code, reports, docs or .github. Do not commit/push. Do not ask questions.
+          Keep continue=true and terminal_ready=false while declared repo-local work remains. Set status=COMPLETE,
+          continue=false and terminal_ready=true only when every declared check group is true AND the actual product satisfies the
+          terminal requirements of the MASTER_PROMPT. A failed/missing lane or external provider outage is never itself a reason to stop.
+
+          Modify state/factory.json only. Do not edit product code, reports, docs or .github. Do not manage branches, commit or push.
+          Do not ask questions.
           EOF
           )"
-          RC=$?
-          set -e
-          if [[ "$RC" -ne 0 ]]; then
-            echo "::error::Ox Product Director failed/stalled rc=$RC. Existing progress/audit remain durable; next tick retries state evaluation."
+              RC=$?
+              set -e
+              [[ "$RC" -eq 0 ]] && return 0
+              sleep 15
+            done
+            return 75
+          }
+
+          run_director || {
+            echo "::error::Product Director unavailable after bounded Ox retries; refusing undirected main advance"
             exit 75
-          fi
+          }
 
-          BAD=$(git status --porcelain | awk '{print $2}' | grep -v '^state/factory.json$' || true)
-          if [[ -n "$BAD" ]]; then
-            echo "::warning::Director attempted out-of-role edits; restoring all except durable state."
-            git restore --source=HEAD --staged --worktree -- . ':!state/factory.json' 2>/dev/null || true
-          fi
+          mapfile -d '' BAD_TRACKED < <(git diff --name-only -z -- . ':!state/factory.json')
+          for FILE in "${BAD_TRACKED[@]}"; do
+            git restore --staged --worktree -- "$FILE" 2>/dev/null || true
+          done
+          while IFS= read -r -d '' FILE; do
+            rm -rf -- "$FILE"
+          done < <(git ls-files --others --exclude-standard -z)
 
-          jq empty state/factory.json
+          FALSE_GATES=$(jq '[to_entries[] | select(.key | endswith("_checks")) | select(.value | type == "object") | .value | to_entries[] | select(.value == false)] | length' state/factory.json)
           STATUS=$(jq -r '.status // "BUILDING"' state/factory.json)
           CONTINUE=$(jq -r '.continue // true' state/factory.json)
-          CHECK_GROUPS=$(jq '[to_entries[] | select(.key | endswith("_checks")) | select(.value | type == "object")] | length' state/factory.json)
-          FALSE=$(jq '[to_entries[] | select(.key | endswith("_checks")) | select(.value | type == "object") | .value | to_entries[] | select(.value == false)] | length' state/factory.json)
+          TERMINAL_READY=$(jq -r '.terminal_ready // false' state/factory.json)
 
-          if [[ "$STATUS" == "COMPLETE" && ( "$CONTINUE" != "false" || "$CHECK_GROUPS" -eq 0 || "$FALSE" -ne 0 ) ]]; then
-            echo "::error::Product Director attempted premature COMPLETE; rejecting state mutation."
-            git restore --source=HEAD -- state/factory.json
-            exit 69
+          if [[ "$FALSE_GATES" -gt 0 && ( "$STATUS" == "COMPLETE" || "$CONTINUE" != "true" || "$TERMINAL_READY" == "true" ) ]]; then
+            TMP=$(mktemp)
+            jq '.status="BUILDING" | .continue=true | .terminal_ready=false | .blocking_reason=null' state/factory.json > "$TMP"
+            mv "$TMP" state/factory.json
+            echo "::warning::Premature terminal state rejected mechanically because false gates remain"
           fi
 
           git add state/factory.json
           if ! git diff --cached --quiet; then
             git commit -m "factory: durable product truth ${GITHUB_RUN_ID}"
-            git pull --rebase origin main
-            git push origin HEAD:main
-            echo "DURABLE_STATE_PERSISTED head=$(git rev-parse HEAD) status=$STATUS false_gates=$FALSE"
-          else
-            echo "DURABLE_STATE_UNCHANGED status=$STATUS false_gates=$FALSE"
           fi
 
-      - name: Final invariant
-        if: steps.terminal.outputs.terminal != 'true'
+          npm install --ignore-scripts --no-audit --no-fund --silent
+          npm test
+          npm run demo
+          echo "DIRECTOR_COMPLETE head=$(git rev-parse HEAD)"
+
+      - name: Advance main exactly once
         shell: bash
         run: |
           set -euo pipefail
           git fetch origin main
-          git reset --hard origin/main
-          npm install --ignore-scripts --no-audit --no-fund --silent
-          npm test
-          npm run demo
-          STATUS=$(jq -r '.status // "BUILDING"' state/factory.json)
-          FALSE=$(jq '[to_entries[] | select(.key | endswith("_checks")) | select(.value | type == "object") | .value | to_entries[] | select(.value == false)] | length' state/factory.json)
-          echo "BEETLEJUICE_TICK_COMPLETE status=$STATUS remaining_false_gates=$FALSE head=$(git rev-parse HEAD)"
+          CURRENT_MAIN=$(git rev-parse origin/main)
+          if [[ "$CURRENT_MAIN" != "$BASE_SHA" ]]; then
+            echo "::error::main advanced during this cycle (base=$BASE_SHA current=$CURRENT_MAIN). Refusing a stale overwrite; the next tick will recompute from current main."
+            exit 78
+          fi
+          git push origin HEAD:main
+          echo "MAIN_ADVANCED from=$BASE_SHA to=$(git rev-parse HEAD)"
+
+  cleanup:
+    name: CLEANUP — ephemeral branches
+    needs: [prepare, lanes, integrate_audit_direct]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Delete all transient orchestration refs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -u
+          for PREFIX in "factory/" "cycle/"; do
+            mapfile -t REFS < <(
+              gh api --paginate "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${PREFIX}" \
+                --jq '.[].ref' 2>/dev/null || true
+            )
+            for REF in "${REFS[@]}"; do
+              SHORT=${REF#refs/heads/}
+              gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${SHORT}" >/dev/null 2>&1 || true
+            done
+          done
+          gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/lab/integration" >/dev/null 2>&1 || true
+          echo "EPHEMERAL_BRANCH_CLEANUP_COMPLETE"
