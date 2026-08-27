@@ -8,16 +8,20 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/factory-loop.yml'
-      - '.opencode/agents/product_director.md'
+      - 'docs/MASTER_PROMPT.md'
+      - 'docs/PRODUCT_OBJECTIVE.md'
+      - 'docs/agents/AGENT_CARDS.md'
+      - 'docs/workcards/**'
+      - '.opencode/agents/**'
 
 permissions:
   contents: write
-  actions: read
+  actions: write
 
 concurrency:
-  group: beetlejuice-product-factory
-  # A control-plane edit replaces the obsolete implementation immediately.
-  # Normal scheduled ticks never interrupt useful work already in progress.
+  group: beetlejuice-autonomous-continuation
+  # A control-plane edit replaces an obsolete implementation immediately.
+  # Scheduled ticks queue behind useful work instead of killing it.
   cancel-in-progress: ${{ github.event_name == 'push' }}
 
 jobs:
@@ -27,7 +31,7 @@ jobs:
     timeout-minutes: 55
 
     steps:
-      - name: Checkout the single durable branch
+      - name: Checkout the only durable product branch
         uses: actions/checkout@v6
         with:
           ref: main
@@ -38,146 +42,331 @@ jobs:
         with:
           node-version: '24'
 
-      - name: Configure repository writer
+      - name: Configure durable writer
         shell: bash
         run: |
-          git config user.name "beetlejuice-autonomous-director"
+          git config user.name "beetlejuice-autonomous-factory"
           git config user.email "beetlejuice-autonomous@users.noreply.github.com"
 
-      - name: Install OpenCode
-        shell: bash
-        run: |
-          set -euo pipefail
-          for attempt in 1 2 3; do
-            if curl -fsSL https://opencode.ai/install | bash; then
-              break
-            fi
-            if [[ "$attempt" == 3 ]]; then
-              echo "::error::OpenCode installation failed after 3 attempts"
-              exit 70
-            fi
-            sleep $((attempt * 10))
-          done
-          echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
-          "$HOME/.opencode/bin/opencode" --version
-
-      - name: Advance the product from durable repo truth
+      - name: Remove obsolete orchestration debris
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          set -euo pipefail
+          set -u
 
-          OPENCODE="$HOME/.opencode/bin/opencode"
-          MODELS=(
-            "opencode/x-preview-f-free"
-            "opencode/nemotron-3.5-lightning-free"
-            "opencode/hy3-free"
+          # Old cycle branches and lab/integration are no longer part of the design.
+          mapfile -t OLD_REFS < <(
+            gh api --paginate "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/cycle/" --jq '.[].ref' 2>/dev/null || true
           )
-          MAX_ROUNDS=3
+          for REF in "${OLD_REFS[@]}"; do
+            SHORT=${REF#refs/heads/}
+            gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${SHORT}" >/dev/null 2>&1 || true
+          done
+          gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/lab/integration" >/dev/null 2>&1 || true
 
-          terminal_state() {
-            [[ -f state/factory.json ]] || return 1
-            local status continue_flag false_gates check_groups
-            status=$(jq -r '.status // "BUILDING"' state/factory.json 2>/dev/null || echo BUILDING)
-            continue_flag=$(jq -r '.continue // true' state/factory.json 2>/dev/null || echo true)
-            check_groups=$(jq '[to_entries[] | select(.key | endswith("_checks")) | select(.value | type == "object")] | length' state/factory.json 2>/dev/null || echo 0)
-            false_gates=$(jq '[to_entries[] | select(.key | endswith("_checks")) | select(.value | type == "object") | .value | to_entries[] | select(.value == false)] | length' state/factory.json 2>/dev/null || echo 999)
-            [[ "$status" == "COMPLETE" && "$continue_flag" == "false" && "$check_groups" -gt 0 && "$false_gates" -eq 0 ]]
-          }
-
-          for ROUND in $(seq 1 "$MAX_ROUNDS"); do
-            echo "===== AUTONOMOUS ROUND $ROUND/$MAX_ROUNDS ====="
-            git fetch origin main
-            git reset --hard origin/main
-
-            if terminal_state; then
-              echo "BEETLEJUICE_TERMINAL_STATE_VERIFIED"
-              exit 0
-            fi
-
-            ROUND_COMMITTED=false
-
-            for MODEL in "${MODELS[@]}"; do
-              echo "Trying autonomous director with model=$MODEL"
-
-              PROMPT=$(cat <<'EOF'
-          You are the sole autonomous continuation agent for BEETLEJUICE. There are no lanes, no supervisor, no integration director, and no other agent that will finish your work later.
-
-          Read AGENTS.md, docs/MASTER_PROMPT.md, docs/PRODUCT_OBJECTIVE.md, docs/agents/AGENT_CARDS.md, every workcard, state/factory.json, existing reports, tests, and the actual implementation before deciding what to do.
-
-          The durable objective from the project conversation is binding: build the actual Beetlejuice product. P0 is already established. P0.5 real-world architecture-learning evidence is the active gate before P1 unless the repository contains executed evidence proving otherwise. The primary learned object is automation architecture; billing is a tenant-local calibration/economic-label layer. Do not turn the project into a token dashboard. Do not invent real-world evidence, monetary evidence, causality, or completion.
-
-          In this invocation, identify the single highest-value unfinished repo-local action and IMPLEMENT IT end-to-end. Prefer concrete code, executable evidence collection, tests, real public GitHub evidence, architecture reconstruction, privacy-safe export, or the next product capability over prose. If the active gate requires public GitHub evidence, you may use GH_TOKEN/gh/curl and the network. A provider outage, a failed previous workflow, or missing optional billing credentials is never a reason to stop repo-local work.
-
-          You may edit anywhere in the product repository that is needed, including packages, apps, tests, reports, docs, and state/factory.json. Do NOT modify anything under .github/workflows or .github/scripts. Do NOT create cycle branches, do NOT use lab/integration, and do NOT git commit or push; the workflow owns persistence. Work directly on the checked-out main candidate.
-
-          Before returning, run the relevant tests yourself. Update state/factory.json only to facts supported by executed evidence. Keep continue=true unless the product is genuinely COMPLETE with every declared check group true. Never claim a gate from fixtures or prose when it requires executed real-world evidence. If an approach yields no durable delta, change strategy within this invocation rather than returning empty-handed.
-          EOF
+          # Preserve explicitly referenced evidence runs; keep only a very small recent
+          # history otherwise. Historical workflow runs are not part of product state.
+          PRESERVE=$(jq -r '.. | objects | to_entries[]? | select(.key | test("run_id$")) | .value | select(type == "number")' state/factory.json 2>/dev/null | sort -u || true)
+          mapfile -t RUN_ROWS < <(
+            gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs?per_page=100" \
+              --jq '.workflow_runs[] | [.id,.name,.status,.created_at] | @tsv' 2>/dev/null || true
           )
-
-              LOG="/tmp/beetlejuice-opencode-${ROUND}-$(echo "$MODEL" | tr '/:' '__').log"
-              set +e
-              timeout 14m "$OPENCODE" run --model "$MODEL" --agent product_director "$PROMPT" 2>&1 | tee "$LOG"
-              RC=${PIPESTATUS[0]}
-              set -e
-
-              if [[ "$RC" -ne 0 ]]; then
-                echo "::warning::model=$MODEL failed rc=$RC; moving to the next free model without long sleep"
-                sleep 5
-                continue
-              fi
-
-              # The automation itself is immutable to its agent. Product work may never
-              # silently rewrite the mechanism keeping the project alive.
-              git restore --source=HEAD --staged --worktree .github/workflows 2>/dev/null || true
-              git restore --source=HEAD --staged --worktree .github/scripts 2>/dev/null || true
-
-              if git diff --quiet && git diff --cached --quiet && [[ -z "$(git ls-files --others --exclude-standard)" ]]; then
-                if terminal_state; then
-                  echo "BEETLEJUICE_TERMINAL_STATE_VERIFIED_AFTER_AGENT"
-                  exit 0
-                fi
-                echo "::warning::model=$MODEL returned success with zero durable delta; trying the next model"
-                continue
-              fi
-
-              echo "Validating candidate produced by model=$MODEL"
-              npm install --ignore-scripts --no-audit --no-fund --silent
-              set +e
-              npm test
-              TEST_RC=$?
-              npm run demo
-              DEMO_RC=$?
-              set -e
-
-              if [[ "$TEST_RC" -ne 0 || "$DEMO_RC" -ne 0 ]]; then
-                echo "::warning::candidate from model=$MODEL is not green (test=$TEST_RC demo=$DEMO_RC); next model must repair the same worktree"
-                continue
-              fi
-
-              git add -A
-              if git diff --cached --quiet; then
-                echo "::warning::validated candidate contains no committable delta; trying next model"
-                continue
-              fi
-
-              git commit -m "factory: autonomous product progress ${GITHUB_RUN_ID}.${ROUND}"
-
-              # A human/control-plane edit may have landed while the agent worked. Rebase
-              # rather than overwriting it. If conflict occurs, fail visibly; the next
-              # scheduled tick starts from repository truth again.
-              git pull --rebase origin main
-              git push origin HEAD:main
-              echo "BEETLEJUICE_PROGRESS_COMMITTED round=$ROUND model=$MODEL head=$(git rev-parse HEAD)"
-              ROUND_COMMITTED=true
-              break
-            done
-
-            if [[ "$ROUND_COMMITTED" != true ]]; then
-              echo "::error::No model produced tested durable progress in round $ROUND. The scheduled workflow will retry from main on the next tick."
-              exit 68
+          declare -A KEPT=()
+          for ROW in "${RUN_ROWS[@]}"; do
+            IFS=$'\t' read -r ID NAME STATUS CREATED <<<"$ROW"
+            [[ "$ID" == "$GITHUB_RUN_ID" ]] && continue
+            [[ "$STATUS" == "completed" ]] || continue
+            grep -qx "$ID" <<<"$PRESERVE" 2>/dev/null && continue
+            COUNT=${KEPT["$NAME"]:-0}
+            if (( COUNT < 2 )); then
+              KEPT["$NAME"]=$((COUNT + 1))
+              continue
             fi
+            gh api --method DELETE "repos/${GITHUB_REPOSITORY}/actions/runs/${ID}" >/dev/null 2>&1 || true
           done
 
-          echo "Completed $MAX_ROUNDS productive rounds; next scheduled tick will continue from main."
+          echo "OBSOLETE_ORCHESTRATION_CLEANUP_DONE"
+
+      - name: Stop immediately only for a genuinely terminal product
+        id: terminal
+        shell: bash
+        run: |
+          set -euo pipefail
+          STATUS=$(jq -r '.status // "BUILDING"' state/factory.json)
+          CONTINUE=$(jq -r '.continue // true' state/factory.json)
+          GROUPS=$(jq '[to_entries[] | select(.key | endswith("_checks")) | select(.value | type == "object")] | length' state/factory.json)
+          FALSE=$(jq '[to_entries[] | select(.key | endswith("_checks")) | select(.value | type == "object") | .value | to_entries[] | select(.value == false)] | length' state/factory.json)
+          if [[ "$STATUS" == "COMPLETE" && "$CONTINUE" == "false" && "$GROUPS" -gt 0 && "$FALSE" -eq 0 ]]; then
+            echo "terminal=true" >> "$GITHUB_OUTPUT"
+            echo "BEETLEJUICE_TERMINAL_STATE_VERIFIED"
+          else
+            echo "terminal=false" >> "$GITHUB_OUTPUT"
+            echo "BEETLEJUICE_CONTINUES status=$STATUS false_gates=$FALSE"
+          fi
+
+      - name: Install OpenCode
+        if: steps.terminal.outputs.terminal != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          for ATTEMPT in 1 2 3; do
+            if curl -fsSL https://opencode.ai/install | bash; then
+              echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
+              "$HOME/.opencode/bin/opencode" --version
+              exit 0
+            fi
+            sleep $((ATTEMPT * 10))
+          done
+          echo "::error::OpenCode installation unavailable; next scheduled tick will retry."
+          exit 70
+
+      - name: Specialist → integration → validation → persistence
+        if: steps.terminal.outputs.terminal != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OX_MODEL: opencode/x-preview-f-free
+        shell: bash
+        run: |
+          set -euo pipefail
+          OPENCODE="$HOME/.opencode/bin/opencode"
+
+          protect_constitution() {
+            git restore --source=HEAD --staged --worktree -- \
+              .github \
+              AGENTS.md \
+              docs/MASTER_PROMPT.md \
+              docs/PRODUCT_OBJECTIVE.md \
+              docs/agents/AGENT_CARDS.md \
+              docs/workcards 2>/dev/null || true
+          }
+
+          run_role() {
+            local ROLE="$1"
+            local MISSION="$2"
+            echo "===== ROLE: $ROLE ====="
+            set +e
+            timeout 8m "$OPENCODE" run --model "$OX_MODEL" --agent "$ROLE" "$(cat <<EOF
+          Read AGENTS.md, docs/MASTER_PROMPT.md, docs/PRODUCT_OBJECTIVE.md, docs/agents/AGENT_CARDS.md, all active workcards, state/factory.json, current reports, tests and implementation before acting. The MASTER_PROMPT is binding.
+
+          You are running as role: $ROLE.
+          Mission for this invocation: $MISSION
+
+          Work on the checked-out main candidate. Do not create/switch branches. Do not git commit/push. Do not modify .github/**, AGENTS.md, MASTER_PROMPT, PRODUCT_OBJECTIVE, AGENT_CARDS or workcards. Treat state/factory.json as read-only unless you are product_director. Respect your canonical role card and owned domain.
+
+          P0 is established. WC-007/P0.5 real-world architecture-learning evidence outranks P1 until executed evidence closes it. Architecture is the primary learned object; billing is a local calibration/economic-label layer. Unknown remains unknown. Fixtures/prose do not satisfy real-world gates.
+
+          Produce the highest-value concrete, tested, durable progress available to your role. If the first approach yields no delta, change strategy within this invocation. Do not ask questions.
+          EOF
+          )"
+            RC=$?
+            set -e
+            protect_constitution
+            if [[ "$RC" -ne 0 ]]; then
+              echo "::error::Ox role $ROLE failed/stalled rc=$RC. No alternate model is used. Next scheduled tick will retry from durable main."
+              exit 75
+            fi
+          }
+
+          has_false() {
+            local KEYS="$1"
+            jq -e --argjson keys "$KEYS" '
+              .p0_5_checks as $c |
+              any($keys[]; ($c[.] // false) == false)
+            ' state/factory.json >/dev/null 2>&1
+          }
+
+          ROLE_QUEUE=()
+          CORE_KEYS='["architecture_schema_topology_policy_representation","architecture_learning_hypotheses_falsifiable","certain_structural_waste_precision_review","determinism_on_frozen_real_evidence","billing_no_evidence_honesty_and_architecture_utility","billing_partial_evidence_honesty","billing_complete_evidence_accounting","local_real_billing_attachable_without_schema_redesign","economic_or_learnable_corpus_path_proven"]'
+          GITHUB_KEYS='["identifiable_primary_corpus_5_plus","secondary_messy_robustness_set","agent_task_model_provenance_confidence","architecture_reconstruction_manual_ground_truth","zero_crash_or_typed_refusal","pagination_large_history","rate_limit_network_adversarial","classification_manual_ground_truth","outcome_manual_ground_truth","real_github_https_positive_path"]'
+          PRIVACY_KEYS='["privacy_safe_global_architecture_export","privacy_boundaries_preserved"]'
+          PRODUCT_KEYS='["real_world_report_persisted"]'
+          INTEGRATION_KEYS='["integration_ci_green_after_repairs"]'
+
+          has_false "$CORE_KEYS" && ROLE_QUEUE+=(core_builder)
+          has_false "$GITHUB_KEYS" && ROLE_QUEUE+=(github_builder)
+          has_false "$PRIVACY_KEYS" && ROLE_QUEUE+=(privacy_builder)
+          has_false "$PRODUCT_KEYS" && ROLE_QUEUE+=(product_builder)
+          has_false "$INTEGRATION_KEYS" && ROLE_QUEUE+=(integration_director)
+
+          if [[ "${#ROLE_QUEUE[@]}" -eq 0 ]]; then
+            NEXT=$(jq -r '.next_action // "CONTINUE_PRODUCT"' state/factory.json)
+            case "$NEXT" in
+              *GITHUB*|*APP*|*WEBHOOK*|*INGEST*) ROLE_QUEUE=(github_builder product_builder) ;;
+              *PRIVACY*) ROLE_QUEUE=(privacy_builder product_builder) ;;
+              *ARCHITECT*|*SCHEMA*|*CORE*|*BILLING*) ROLE_QUEUE=(core_builder product_builder) ;;
+              *) ROLE_QUEUE=(product_builder github_builder) ;;
+            esac
+          fi
+
+          BEFORE=$(git status --porcelain)
+          SPECIALIST_PROGRESS=false
+          ATTEMPTED=0
+          for ROLE in "${ROLE_QUEUE[@]}"; do
+            ATTEMPTED=$((ATTEMPTED + 1))
+            case "$ROLE" in
+              core_builder) MISSION="Advance the highest-priority unfinished canonical architecture/schema/structural-waste/billing-seam evidence required by the active gate." ;;
+              github_builder) MISSION="Advance WC-007 using real high-identifiability GitHub evidence: corpus/provenance/topology/outcome/robustness/real-HTTPS work, not arbitrary repo volume." ;;
+              privacy_builder) MISSION="Advance executable unlinkable-by-default architecture export and privacy/re-identification gates required by the active milestone." ;;
+              product_builder) MISSION="Advance the smallest real product/report surface that exposes architecture/outcome/waste/evidence honestly and persists required real-world evidence." ;;
+              integration_director) MISSION="Repair cross-component seams and make the complete product test/demo path green on this same main candidate." ;;
+            esac
+            run_role "$ROLE" "$MISSION"
+
+            if [[ -n "$(git status --porcelain)" && "$(git status --porcelain)" != "$BEFORE" ]]; then
+              SPECIALIST_PROGRESS=true
+              break
+            fi
+            echo "::warning::$ROLE returned zero durable delta; trying a different canonical role instead of spinning."
+            [[ "$ATTEMPTED" -ge 2 ]] && break
+          done
+
+          if [[ "$SPECIALIST_PROGRESS" != true ]]; then
+            echo "::error::Two role strategies produced no durable delta. Next tick will re-read durable state rather than fabricate progress."
+            exit 67
+          fi
+
+          # Only the Product Director owns durable state truth.
+          git restore --source=HEAD --staged --worktree state/factory.json 2>/dev/null || true
+
+          echo "===== FULL PRODUCT VALIDATION ====="
+          npm install --ignore-scripts --no-audit --no-fund --silent
+          set +e
+          npm test
+          TEST_RC=$?
+          npm run demo
+          DEMO_RC=$?
+          set -e
+
+          if [[ "$TEST_RC" -ne 0 || "$DEMO_RC" -ne 0 ]]; then
+            run_role integration_director "The current specialist delta is not fully green (test=$TEST_RC demo=$DEMO_RC). Repair the actual cross-component failure without discarding useful work, then run the complete test/demo path."
+            git restore --source=HEAD --staged --worktree state/factory.json 2>/dev/null || true
+            npm install --ignore-scripts --no-audit --no-fund --silent
+            npm test
+            npm run demo
+          fi
+
+          protect_constitution
+          git add -A
+          if git diff --cached --quiet; then
+            echo "::error::Validated work disappeared after constitution/state protection; refusing fake progress."
+            exit 66
+          fi
+          git commit -m "factory: autonomous specialist progress ${GITHUB_RUN_ID}"
+          git pull --rebase origin main
+          git push origin HEAD:main
+          echo "SPECIALIST_PROGRESS_PERSISTED head=$(git rev-parse HEAD)"
+
+      - name: Adversarial audit on persisted candidate
+        if: steps.terminal.outputs.terminal != 'true'
+        env:
+          OX_MODEL: opencode/x-preview-f-free
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git reset --hard origin/main
+          OPENCODE="$HOME/.opencode/bin/opencode"
+
+          set +e
+          timeout 8m "$OPENCODE" run --model "$OX_MODEL" --agent product_auditor "$(cat <<'EOF'
+          Read AGENTS.md, docs/MASTER_PROMPT.md, docs/PRODUCT_OBJECTIVE.md, docs/agents/AGENT_CARDS.md, active workcards including WC-007, state/factory.json, actual code/tests and existing reports. The MASTER_PROMPT is binding.
+
+          Adversarially audit the current persisted main candidate. Try to falsify active gate claims. Distinguish fixtures from executed real-world evidence. For WC-007, challenge corpus identifiability, architecture reconstruction, outcome attribution, every 'certain' waste claim, billing-evidence honesty, privacy, determinism, pagination/network behavior and real HTTPS evidence. Write/update the appropriate report(s) under reports/. Do not modify product code, state, control-plane docs or workflows. Do not commit/push. Do not ask questions.
+          EOF
+          )"
+          RC=$?
+          set -e
+          if [[ "$RC" -ne 0 ]]; then
+            echo "::error::Ox auditor failed/stalled rc=$RC. Specialist progress is already durable; next tick will retry audit."
+            exit 75
+          fi
+
+          # Auditor owns reports only.
+          BAD=$(git status --porcelain | awk '{print $2}' | grep -v '^reports/' || true)
+          if [[ -n "$BAD" ]]; then
+            echo "::warning::Auditor attempted out-of-role edits; restoring them:"
+            echo "$BAD"
+            git restore --source=HEAD --staged --worktree -- . ':!reports' 2>/dev/null || true
+            git clean -fd -e reports/ >/dev/null 2>&1 || true
+          fi
+
+          git add reports 2>/dev/null || true
+          if ! git diff --cached --quiet; then
+            git commit -m "factory: adversarial audit ${GITHUB_RUN_ID}"
+            git pull --rebase origin main
+            git push origin HEAD:main
+            echo "AUDIT_PERSISTED head=$(git rev-parse HEAD)"
+          else
+            echo "AUDIT_ZERO_DELTA"
+          fi
+
+      - name: Product Director updates durable truth
+        if: steps.terminal.outputs.terminal != 'true'
+        env:
+          OX_MODEL: opencode/x-preview-f-free
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git reset --hard origin/main
+          OPENCODE="$HOME/.opencode/bin/opencode"
+
+          set +e
+          timeout 8m "$OPENCODE" run --model "$OX_MODEL" --agent product_director "$(cat <<'EOF'
+          Read the binding docs/MASTER_PROMPT.md first, then AGENTS.md, docs/PRODUCT_OBJECTIVE.md, docs/agents/AGENT_CARDS.md, every active workcard, state/factory.json, persisted reports, actual code and executed tests/evidence.
+
+          Act only as final Product Director. Evaluate what is genuinely proven now and update state/factory.json accordingly. P0 is established. WC-007/P0.5 stays before P1 until its required real-world architecture-learning evidence is actually defensible. Keep unknowns unknown. Fixtures/prose cannot close real-world gates. Keep continue=true while any declared repo-local work remains. COMPLETE/continue=false is allowed only when every declared check group is true and the MASTER_PROMPT terminal product requirements are actually satisfied.
+
+          Update state/factory.json only. Do not modify product code, reports, docs or .github. Do not commit/push. Do not ask questions.
+          EOF
+          )"
+          RC=$?
+          set -e
+          if [[ "$RC" -ne 0 ]]; then
+            echo "::error::Ox Product Director failed/stalled rc=$RC. Existing progress/audit remain durable; next tick retries state evaluation."
+            exit 75
+          fi
+
+          # Director owns state only.
+          BAD=$(git status --porcelain | awk '{print $2}' | grep -v '^state/factory.json$' || true)
+          if [[ -n "$BAD" ]]; then
+            echo "::warning::Director attempted out-of-role edits; restoring all except durable state."
+            git restore --source=HEAD --staged --worktree -- . ':!state/factory.json' 2>/dev/null || true
+          fi
+
+          jq empty state/factory.json
+          STATUS=$(jq -r '.status // "BUILDING"' state/factory.json)
+          CONTINUE=$(jq -r '.continue // true' state/factory.json)
+          GROUPS=$(jq '[to_entries[] | select(.key | endswith("_checks")) | select(.value | type == "object")] | length' state/factory.json)
+          FALSE=$(jq '[to_entries[] | select(.key | endswith("_checks")) | select(.value | type == "object") | .value | to_entries[] | select(.value == false)] | length' state/factory.json)
+
+          if [[ "$STATUS" == "COMPLETE" && ( "$CONTINUE" != "false" || "$GROUPS" -eq 0 || "$FALSE" -ne 0 ) ]]; then
+            echo "::error::Product Director attempted premature COMPLETE; rejecting state mutation."
+            git restore --source=HEAD -- state/factory.json
+            exit 69
+          fi
+
+          git add state/factory.json
+          if ! git diff --cached --quiet; then
+            git commit -m "factory: durable product truth ${GITHUB_RUN_ID}"
+            git pull --rebase origin main
+            git push origin HEAD:main
+            echo "DURABLE_STATE_PERSISTED head=$(git rev-parse HEAD) status=$STATUS false_gates=$FALSE"
+          else
+            echo "DURABLE_STATE_UNCHANGED status=$STATUS false_gates=$FALSE"
+          fi
+
+      - name: Final invariant
+        if: steps.terminal.outputs.terminal != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git reset --hard origin/main
+          npm install --ignore-scripts --no-audit --no-fund --silent
+          npm test
+          npm run demo
+          STATUS=$(jq -r '.status // "BUILDING"' state/factory.json)
+          FALSE=$(jq '[to_entries[] | select(.key | endswith("_checks")) | select(.value | type == "object") | .value | to_entries[] | select(.value == false)] | length' state/factory.json)
+          echo "BEETLEJUICE_TICK_COMPLETE status=$STATUS remaining_false_gates=$FALSE head=$(git rev-parse HEAD)"
