@@ -126,12 +126,16 @@ A distinct, explicitly versioned `AGENTIC_DYNAMICS_EXPORT` may later export abst
 ## Autonomous factory liveness
 The repository must keep advancing without a human while useful repo-local work exists.
 
-- Ox is the only autonomous coding/reasoning model. Provider failures, rate limits and stalls trigger Ox retries or a fresh Ox-only cycle, never silent substitution with another model.
+- There is exactly ONE GitHub continuation workflow. It owns orchestration, Git mechanics, validation, final persistence and cleanup. There is no supervisor workflow and no workflow-triggering-workflow chain.
+- `main` is the only durable product/control/progress state. `state/factory.json` on `main` is the only durable factory state. There is no persistent `lab/integration` state and no lane-local state authority.
+- Ox is the only autonomous coding/reasoning model. Provider failures, rate limits and stalls get a short bounded Ox retry inside the affected role; after that the lane/cycle yields and the next scheduled tick retries from durable `main`. Never silently substitute another model.
+- Builder roles may run in parallel only on workflow-created ephemeral branches, all cut from the exact same recorded `main` SHA. A builder may not update `state/factory.json` or the binding control plane.
+- A failed or zero-delta builder lane must not erase successful sibling work. The integration phase consumes only lane branches that actually contain validated commits.
+- `integration_director` assembles useful lane outputs on one temporary integration candidate, resolves semantic conflicts and repairs the complete test/demo path. The integration candidate is not a second durable world.
+- `product_auditor` then tries to falsify the assembled candidate. `product_director` alone updates `state/factory.json` from executed candidate + audit evidence. Only then may the workflow advance `main`.
 - A failed lane, failed test, failed integration, provider outage, `BLOCKED_EXTERNAL`, or accidental `continue=false` is not a terminal condition while another repo-local repair, experiment, fixture, corpus slice, test, refactor or diagnostic can advance a declared gate.
-- `lab/integration` is the durable cumulative product/progress state. Main owns binding policy/control-plane instructions. Never erase newer verified integration progress with an older main state.
-- A workflow that is stuck must be killed and relaunched from durable state. A workflow that finishes red must still leave any safe snapshots/evidence available to integration and the next cycle.
-- `COMPLETE` is evidence-gated, not an LLM opinion. It is terminal only when all declared machine-checkable gates are green and `terminal_ready=true` is explicitly justified by the roadmap/evidence.
-- Human intervention may pause autonomy only when `requires_user_action=true` AND `repo_local_work_exhausted=true`; before setting those flags, exhaust every safe repo-local route.
+- `COMPLETE` is evidence-gated, not an LLM opinion. A terminal state requires every declared machine-checkable check group to be true and the MASTER_PROMPT terminal requirements to be genuinely satisfied.
+- Ephemeral branches are deleted after every cycle, including failed cycles. Old `cycle/*`, `lab/integration`, obsolete workflow runs and transient artifacts are cleanup targets, never recovery state.
 
 ### Anti-spin rule
 Autonomy means progress, not infinite repetition. If a cycle fails to create a durable capability/evidence/state delta, the next attempt must not merely repeat the same approach.
