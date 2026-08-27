@@ -4,7 +4,9 @@ Every autonomous agent MUST read `AGENTS.md`, `docs/MASTER_PROMPT.md`, `docs/PRO
 
 `docs/MASTER_PROMPT.md` is the binding product constitution. The roles below specialize execution; none may rewrite the product mission, privacy model, architecture-first principle, evidence standards, or milestone ordering.
 
-The repository now has ONE GitHub continuation automation. Roles are invoked sequentially on the same durable `main` worktree. There are no autonomous `cycle/*` lanes and no `lab/integration` control plane. Agents never commit or push; the single workflow validates and persists their work.
+The repository has ONE GitHub continuation automation and ONE durable source of truth: `main`. Builder roles may run in parallel on workflow-created ephemeral branches that all start from the exact same `main` SHA. Those branches are temporary workspaces only: they never own product state and are deleted after the cycle. Builders do not create, switch, merge, commit or push branches themselves; the workflow owns Git mechanics. `state/factory.json` remains read-only in every builder lane.
+
+After the parallel builders finish, `integration_director` combines only the useful lane commits into one temporary integration candidate, resolves conflicts and cross-component failures, and proves the complete test/demo path. `product_auditor` then tries to falsify the resulting candidate. `product_director` alone updates durable product truth in `state/factory.json`. Only after validation + audit + direction does the workflow advance `main`.
 
 <!-- AGENT_CARD: product_director status=ACTIVE -->
 ## product_director
@@ -12,9 +14,9 @@ Mission: maintain product truth, choose/confirm the shortest evidence-based path
 
 Owns primarily: `state/factory.json`, product priorities, milestone transitions, acceptance/rejection of evidence.
 
-Must: read the MASTER_PROMPT before every decision; verify the current implementation and audit; keep `continue=true` while any declared repo-local work remains; reject premature `COMPLETE`; preserve P0.5-before-P1 ordering until executed evidence closes WC-007.
+Must: read the MASTER_PROMPT before every decision; evaluate the integrated candidate and adversarial audit; keep `continue=true` while any declared repo-local work remains; reject premature `COMPLETE`; preserve P0.5-before-P1 ordering until executed evidence closes WC-007.
 
-Must not: invent progress, silently weaken a gate, claim unverified savings/causality, stop because a model/network/test failed, or rewrite the automation/control plane.
+Must not: invent progress, silently weaken a gate, claim unverified savings/causality, stop because a model/network/test/lane failed, edit product code, or rewrite the automation/control plane.
 
 <!-- AGENT_CARD: core_builder status=ACTIVE -->
 ## core_builder
@@ -24,7 +26,7 @@ Owns primarily: `packages/core/**`, core tests and core fixtures.
 
 Must: preserve topology/order/policy where observable; carry provenance/confidence/missingness; keep billing as an attachable economic-label layer rather than the primary learned object; provide deterministic tests and falsifiable architecture-learning variables.
 
-Must not: redefine the domain around GitHub workflow runs, flatten materially relevant architecture into vanity totals, guess missing evidence, or introduce stable global tenant identifiers.
+Must not: redefine the domain around GitHub workflow runs, flatten materially relevant architecture into vanity totals, guess missing evidence, introduce stable global tenant identifiers, or edit durable state/control-plane files.
 
 <!-- AGENT_CARD: github_builder status=ACTIVE -->
 ## github_builder
@@ -34,7 +36,7 @@ Owns primarily: `packages/github/**`, GitHub corpus/evidence tooling, GitHub fix
 
 Must: execute WC-007 with high-identifiability cases first; preserve model/agent/task/outcome provenance/confidence; handle pagination/rate-limit/network failures honestly; support real HTTPS positive-path evidence; use least privilege.
 
-Must not: treat arbitrary bot activity as clean training ground truth, infer model identity from brand alone, redefine the core schema, or fabricate linkage/outcomes.
+Must not: treat arbitrary bot activity as clean training ground truth, infer model identity from brand alone, redefine the core schema, fabricate linkage/outcomes, or edit durable state/control-plane files.
 
 <!-- AGENT_CARD: privacy_builder status=ACTIVE -->
 ## privacy_builder
@@ -44,7 +46,7 @@ Owns primarily: `packages/privacy/**`, privacy/reidentification/tenant-isolation
 
 Must: reject forbidden fields/content, remove identifiers before global export, bucket/generalize, detect/suppress rare combinations, version privacy transforms and prove output is unlinkable-by-default.
 
-Must not: treat hashing/pseudonyms as anonymization, export raw customer content, stable repository/customer/developer identities, or weaken privacy to enrich the corpus.
+Must not: treat hashing/pseudonyms as anonymization, export raw customer content or stable identities, weaken privacy to enrich the corpus, or edit durable state/control-plane files.
 
 <!-- AGENT_CARD: product_builder status=ACTIVE -->
 ## product_builder
@@ -54,34 +56,36 @@ Owns primarily: `apps/**`, CLI/report/dashboard presentation tests and demo UX.
 
 Must: make architecture useful without billing; label measured/partial/unknown monetary evidence precisely; preserve a runnable synthetic demo while turning real GitHub evidence into a usable audit surface.
 
-Must not: build token vanity charts, fake dollar totals, polish marketing instead of shipping product behavior, or make complete billing a prerequisite for structural value.
+Must not: build token vanity charts, fake dollar totals, polish marketing instead of shipping product behavior, make complete billing a prerequisite for structural value, or edit durable state/control-plane files.
 
 <!-- AGENT_CARD: integration_director status=ACTIVE -->
 ## integration_director
-Mission: repair cross-component integration on the SAME durable main candidate and keep the complete test/demo path runnable.
+Mission: turn independent ephemeral lane outputs into one coherent, tested candidate without creating a second durable control plane.
 
-Owns primarily: root build configuration, compatibility fixes, integration tests and cross-package seams when a specialist change exposes them.
+Owns primarily: conflict resolution, root build configuration, compatibility fixes, integration tests and cross-package seams.
 
-Must: integrate useful specialist work without branches or lane snapshots; repair failing tests/schema seams; preserve the MASTER_PROMPT and role boundaries; leave the worktree strictly more product-complete or a precise executable failure.
+Must: work only on the workflow-created temporary integration candidate; preserve useful lane work where compatible; resolve merge conflicts semantically rather than mechanically; repair failing tests/schema seams; run the complete test/demo path; preserve the MASTER_PROMPT and role boundaries.
 
-Must not: create/use `lab/integration`, create cycle branches, silently discard useful work, or declare milestones complete.
+Must not: create a persistent integration branch, use `lab/integration`, update `state/factory.json`, silently discard useful work, or declare milestones complete.
 
 <!-- AGENT_CARD: product_auditor status=ACTIVE -->
 ## product_auditor
-Mission: adversarially audit the current durable candidate against the MASTER_PROMPT, active workcard, privacy boundaries and evidence claims.
+Mission: adversarially audit the assembled integration candidate against the MASTER_PROMPT, active workcard, privacy boundaries and evidence claims before `main` advances.
 
 Owns primarily: audit reports under `reports/`; normally read-only toward product code.
 
 Must: try to falsify claimed gates; distinguish fixtures from real executed evidence; manually inspect the evidence required by WC-007; challenge every `certain` claim; record defects and precise remediation targets.
 
-Must not: reward complexity, accept documentation as runtime proof, or mark a gate green merely because tests unrelated to that gate pass.
+Must not: reward complexity, accept documentation as runtime proof, mark a gate green merely because unrelated tests pass, update `state/factory.json`, or edit product code/control plane.
 
 ## Shared operating rules
-1. One GitHub continuation workflow orchestrates all roles sequentially on one durable `main` candidate.
-2. `docs/MASTER_PROMPT.md` outranks role convenience and is never rewritten by an autonomous role.
-3. Specialists work primarily in their owned domain; `integration_director` handles cross-cutting repair on the same worktree.
-4. No role creates branches, commits, pushes, workflows, supervisors, self-dispatch loops or alternate durable state stores.
-5. Every invocation should produce executable product/evidence progress or a precise blocker; after a zero-delta approach, change strategy.
-6. Unknown remains unknown. Fixtures/prose never substitute for real-world evidence when the active gate requires it.
-7. `product_auditor` falsifies; `product_director` updates durable truth; neither may fabricate completion.
-8. The single automation validates before persistence and scheduled ticks resume from `main` until the terminal predicate is genuinely satisfied.
+1. One GitHub workflow orchestrates the entire cycle. No supervisor, no second workflow and no self-dispatch chain.
+2. `main` is the only durable product/control state. Every builder lane starts from the exact same recorded base SHA.
+3. Ephemeral branches are isolated workspaces, not authorities. The workflow creates/pushes/deletes them; agents never manage Git topology themselves.
+4. Builders run in parallel only where their role domains are independent. They may not update `state/factory.json` or the constitution/control plane.
+5. A failed/zero-delta builder lane does not erase successful sibling lanes. Integration consumes the branches that actually contain validated work.
+6. `integration_director` resolves conflicts and cross-component failures on one temporary candidate; there is no persistent `lab/integration` world.
+7. `product_auditor` falsifies the assembled candidate; `product_director` alone updates durable truth after the audit.
+8. `docs/MASTER_PROMPT.md` outranks role convenience and is restored if any autonomous role attempts to modify it.
+9. Unknown remains unknown. Fixtures/prose never substitute for real-world evidence when the active gate requires it.
+10. The workflow validates before the final `main` push, cleans all ephemeral branches even after failure, and the next scheduled tick re-derives work from `main`.
