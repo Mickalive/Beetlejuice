@@ -81,9 +81,6 @@ jobs:
             gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${ID}/force-cancel" >/dev/null 2>&1 || true
           done
 
-          # Preserve only explicitly referenced evidence plus the two newest runs
-          # of the CURRENT workflow. Every completed run belonging to an obsolete
-          # workflow name is deleted instead of being retained for nostalgia.
           CURRENT_WORKFLOW_NAME="BEETLEJUICE Parallel Factory"
           PRESERVE=$(jq -r '.. | objects | to_entries[]? | select(.key | test("run_id$")) | .value | select(type == "number")' state/factory.json 2>/dev/null | sort -u || true)
           mapfile -t RUN_ROWS < <(
@@ -442,7 +439,7 @@ jobs:
           done
 
           if (( MERGED == 0 )); then
-            echo "::error::No validated lane branch was available. The next scheduled tick will retry from durable main."
+            echo "::error::No validated lane branch was available. Continuation job will launch the next cycle from durable main."
             exit 75
           fi
 
@@ -602,7 +599,7 @@ jobs:
           git fetch origin main
           CURRENT_MAIN=$(git rev-parse origin/main)
           if [[ "$CURRENT_MAIN" != "$BASE_SHA" ]]; then
-            echo "::error::main advanced during this cycle (base=$BASE_SHA current=$CURRENT_MAIN). Refusing a stale overwrite; the next tick will recompute from current main."
+            echo "::error::main advanced during this cycle (base=$BASE_SHA current=$CURRENT_MAIN). Refusing a stale overwrite; continuation will recompute from current main."
             exit 78
           fi
           git push origin HEAD:main
@@ -633,3 +630,53 @@ jobs:
           done
           gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/lab/integration" >/dev/null 2>&1 || true
           echo "EPHEMERAL_BRANCH_CLEANUP_COMPLETE"
+
+  continue_cycle:
+    name: CONTINUE — verified self-relaunch
+    needs: [prepare, lanes, integrate_audit_direct, cleanup]
+    if: ${{ always() && needs.prepare.outputs.terminal != 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Guarantee a successor run exists before this cycle ends
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          WORKFLOW="factory-loop.yml"
+
+          find_successor() {
+            gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs?per_page=100" \
+              --jq ".workflow_runs[] | select(.id != ${GITHUB_RUN_ID}) | select(.path == \".github/workflows/${WORKFLOW}\") | select(.status != \"completed\") | .id" \
+              2>/dev/null | head -n1 || true
+          }
+
+          EXISTING=$(find_successor)
+          if [[ -n "$EXISTING" ]]; then
+            echo "VERIFIED_FACTORY_CONTINUITY successor_run_id=$EXISTING"
+            exit 0
+          fi
+
+          BEFORE=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?per_page=100" \
+            --jq '[.workflow_runs[].id] | max // 0' 2>/dev/null || echo 0)
+
+          for ATTEMPT in 1 2 3; do
+            echo "SELF_RELAUNCH_ATTEMPT=$ATTEMPT/3 current_run=$GITHUB_RUN_ID"
+            if gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/workflows/${WORKFLOW}/dispatches" -f ref=main >/dev/null; then
+              for POLL in 1 2 3 4 5 6 7 8 9 10; do
+                sleep 2
+                NEXT=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?event=workflow_dispatch&per_page=20" \
+                  --jq ".workflow_runs[] | select(.id > ${BEFORE}) | select(.id != ${GITHUB_RUN_ID}) | select(.path == \".github/workflows/${WORKFLOW}\") | .id" \
+                  2>/dev/null | head -n1 || true)
+                if [[ -n "$NEXT" ]]; then
+                  echo "VERIFIED_FACTORY_RELAUNCH successor_run_id=$NEXT"
+                  exit 0
+                fi
+              done
+            fi
+            sleep 5
+          done
+
+          echo "::error::FACTORY_RELAUNCH_NOT_VERIFIED current_run=$GITHUB_RUN_ID"
+          exit 79
