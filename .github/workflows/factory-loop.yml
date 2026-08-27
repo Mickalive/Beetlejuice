@@ -25,7 +25,12 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'push' }}
 
 env:
-  OX_MODEL: opencode/x-preview-f-free
+  BUILD_MODEL_1: opencode/deepseek-v4-flash-free
+  BUILD_MODEL_2: opencode/north-mini-code-free
+  BUILD_MODEL_3: opencode/laguna-s-2.1-free
+  REVIEW_MODEL_1: opencode/laguna-s-2.1-free
+  REVIEW_MODEL_2: opencode/deepseek-v4-flash-free
+  REVIEW_MODEL_3: opencode/mimo-v2.5-free
 
 jobs:
   factory:
@@ -195,8 +200,6 @@ jobs:
           clean_remote_debris
           clean_run_history
 
-          # Do not kill another run of THIS workflow: with one concurrency group,
-          # another live run is the queued successor we deliberately want.
           set +e
           mapfile -t LIVE_ROWS < <(
             api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs?per_page=100" \
@@ -224,11 +227,8 @@ jobs:
           fi
           echo "BEETLEJUICE_CONTINUES base=$BASE_SHA status=$STATUS false_gates=$FALSE_GATES"
 
-          # Baton hand-off is prepared BEFORE doing work. GitHub concurrency keeps
-          # exactly one successor pending until this cycle exits.
           ensure_successor || echo "::warning::early successor dispatch failed; finalize will retry and cron remains a backstop"
 
-          # Install OpenCode once. Every concurrent role gets an isolated HOME/XDG state.
           INSTALLED=false
           for ATTEMPT in 1 2 3; do
             if curl -fsSL --connect-timeout 15 --max-time 60 https://opencode.ai/install | bash; then
@@ -258,12 +258,23 @@ jobs:
             local ROLE="$2"
             local LANE="$3"
             local MISSION="$4"
-            local EXTRA="${5:-}"
+            local PROFILE="${5:-build}"
+            local EXTRA="${6:-}"
             local ROLE_HOME="$RUNNER_TEMP/opencode-${GITHUB_RUN_ID}-${LANE}-${ROLE}"
+            local -a MODELS
+
+            if [[ "$PROFILE" == "review" ]]; then
+              MODELS=("$REVIEW_MODEL_1" "$REVIEW_MODEL_2" "$REVIEW_MODEL_3")
+            else
+              MODELS=("$BUILD_MODEL_1" "$BUILD_MODEL_2" "$BUILD_MODEL_3")
+            fi
+
             mkdir -p "$ROLE_HOME/data" "$ROLE_HOME/cache" "$ROLE_HOME/state"
 
-            for ATTEMPT in 1 2; do
-              echo "OX_ATTEMPT lane=$LANE role=$ROLE attempt=$ATTEMPT/2"
+            local INDEX=0
+            for MODEL in "${MODELS[@]}"; do
+              INDEX=$((INDEX + 1))
+              echo "MODEL_ATTEMPT lane=$LANE role=$ROLE profile=$PROFILE model=$MODEL order=$INDEX/${#MODELS[@]}"
               set +e
               (
                 cd "$WT"
@@ -274,7 +285,7 @@ jobs:
                 GIT_CONFIG_COUNT=1 \
                 GIT_CONFIG_KEY_0=remote.origin.pushurl \
                 GIT_CONFIG_VALUE_0=https://127.0.0.1/beetlejuice-agent-push-disabled \
-                timeout 7m "$OPENCODE" run --model "$OX_MODEL" --agent "$ROLE" "$(cat <<EOF
+                timeout 7m "$OPENCODE" run --model "$MODEL" --agent "$ROLE" "$(cat <<EOF
           Read AGENTS.md, docs/MASTER_PROMPT.md, docs/MASTER_PROMPT_ORIGINAL_FR.md, docs/PRODUCT_OBJECTIVE.md,
           docs/agents/AGENT_CARDS.md, active workcards, state/factory.json, reports, tests and implementation before acting.
           The MASTER_PROMPT is binding.
@@ -294,10 +305,14 @@ jobs:
               )
               RC=$?
               set -e
-              [[ "$RC" -eq 0 ]] && return 0
-              echo "::warning::Ox failed lane=$LANE role=$ROLE rc=$RC"
-              sleep 15
+              if [[ "$RC" -eq 0 ]]; then
+                echo "MODEL_SUCCEEDED lane=$LANE role=$ROLE profile=$PROFILE model=$MODEL"
+                return 0
+              fi
+              echo "::warning::MODEL_FAILED lane=$LANE role=$ROLE profile=$PROFILE model=$MODEL rc=$RC; trying next configured model"
             done
+
+            echo "::error::MODEL_CHAIN_EXHAUSTED lane=$LANE role=$ROLE profile=$PROFILE"
             return 75
           }
 
@@ -332,9 +347,9 @@ jobs:
             git -C "${WT[$LANE]}" config user.email "beetlejuice-autonomous@users.noreply.github.com"
           done
 
-          echo "===== START FOUR OX ROLES IN PARALLEL ====="
+          echo "===== START FOUR BUILD ROLES IN PARALLEL ====="
           for LANE in core github privacy product; do
-            run_role "${WT[$LANE]}" "${ROLE[$LANE]}" "$LANE" "${MISSION[$LANE]}" \
+            run_role "${WT[$LANE]}" "${ROLE[$LANE]}" "$LANE" "${MISSION[$LANE]}" build \
               >"$RUNNER_TEMP/beetlejuice-${GITHUB_RUN_ID}-${LANE}.log" 2>&1 &
             PID[$LANE]=$!
           done
@@ -359,7 +374,7 @@ jobs:
             VALID[$LANE]=false
 
             if [[ "${AGENT_RC[$LANE]}" -ne 0 ]]; then
-              echo "::error::LANE_FAILED lane=$LANE ox_rc=${AGENT_RC[$LANE]}"
+              echo "::error::LANE_FAILED lane=$LANE model_chain_rc=${AGENT_RC[$LANE]}"
               continue
             fi
             if [[ "$(git -C "$WT_PATH" branch --show-current)" != "$BRANCH" ]]; then
@@ -378,7 +393,7 @@ jobs:
 
             if ! npm_validate "$WT_PATH"; then
               echo "::warning::LANE_TEST_RED lane=$LANE; one specialist repair pass"
-              if ! run_role "$WT_PATH" "${ROLE[$LANE]}" "$LANE-repair" "${MISSION[$LANE]}" \
+              if ! run_role "$WT_PATH" "${ROLE[$LANE]}" "$LANE-repair" "${MISSION[$LANE]}" build \
                 "The current lane delta fails the root tests. Repair your own delta without discarding useful work and run relevant tests before returning."; then
                 echo "::error::LANE_REPAIR_FAILED lane=$LANE"
                 continue
@@ -442,7 +457,7 @@ jobs:
             if [[ "$MERGE_RC" -ne 0 ]]; then
               echo "::warning::MERGE_CONFLICT lane=$LANE; integration_director resolving"
               if ! run_role "$IWT" integration_director integration \
-                "Resolve the current Git merge conflict for lane '$LANE'. Preserve compatible intent from prior merged lanes and this lane. Remove conflict markers and leave a coherent integration candidate."; then
+                "Resolve the current Git merge conflict for lane '$LANE'. Preserve compatible intent from prior merged lanes and this lane. Remove conflict markers and leave a coherent integration candidate." build; then
                 git -C "$IWT" merge --abort >/dev/null 2>&1 || git -C "$IWT" reset --hard "$PRE_MERGE"
                 echo "::warning::MERGE_SKIPPED lane=$LANE"
                 continue
@@ -470,7 +485,7 @@ jobs:
           if ! full_validate "$IWT"; then
             echo "::warning::INTEGRATION_RED; integration_director repair"
             run_role "$IWT" integration_director integration-repair \
-              "The assembled candidate fails the complete npm test + demo path. Diagnose and repair the actual cross-component failures while preserving useful lane work. Run the complete validation before returning." || exit 75
+              "The assembled candidate fails the complete npm test + demo path. Diagnose and repair the actual cross-component failures while preserving useful lane work. Run the complete validation before returning." build || exit 75
             protect_integration
             full_validate "$IWT" || {
               echo "::error::INTEGRATION_REMAINS_RED"
@@ -486,7 +501,7 @@ jobs:
           echo "===== ADVERSARIAL AUDIT ====="
           AUDIT_HEAD=$(git -C "$IWT" rev-parse HEAD)
           run_role "$IWT" product_auditor audit \
-            "Adversarially audit the assembled candidate against the MASTER_PROMPT and active workcards, especially WC-007. Try to falsify corpus identifiability, architecture reconstruction, model/task/outcome provenance, every certain-waste claim, billing honesty, privacy, determinism, network/pagination and real HTTPS evidence. Write audit evidence under reports/** only." || {
+            "Adversarially audit the assembled candidate against the MASTER_PROMPT and active workcards, especially WC-007. Try to falsify corpus identifiability, architecture reconstruction, model/task/outcome provenance, every certain-waste claim, billing honesty, privacy, determinism, network/pagination and real HTTPS evidence. Write audit evidence under reports/** only." review || {
               echo "::error::AUDITOR_UNAVAILABLE; refusing unaudited advance"
               exit 75
             }
@@ -515,7 +530,7 @@ jobs:
           echo "===== PRODUCT DIRECTOR ====="
           DIRECTOR_HEAD=$(git -C "$IWT" rev-parse HEAD)
           run_role "$IWT" product_director director \
-            "Act as final Product Director. Evaluate only executed evidence in the integrated candidate and adversarial audit. Update state/factory.json only. P0.5/WC-007 remains before P1 until defensible. Keep continue=true and terminal_ready=false while repo-local work remains; COMPLETE is allowed only when every declared gate and MASTER_PROMPT terminal requirement is truly satisfied." || {
+            "Act as final Product Director. Evaluate only executed evidence in the integrated candidate and adversarial audit. Update state/factory.json only. P0.5/WC-007 remains before P1 until defensible. Keep continue=true and terminal_ready=false while repo-local work remains; COMPLETE is allowed only when every declared gate and MASTER_PROMPT terminal requirement is truly satisfied." review || {
               echo "::error::PRODUCT_DIRECTOR_UNAVAILABLE; refusing undirected advance"
               exit 75
             }
