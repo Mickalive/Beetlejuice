@@ -25,12 +25,18 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'push' }}
 
 env:
-  BUILD_MODEL_1: opencode/deepseek-v4-flash-free
-  BUILD_MODEL_2: opencode/north-mini-code-free
-  BUILD_MODEL_3: opencode/laguna-s-2.1-free
-  REVIEW_MODEL_1: opencode/laguna-s-2.1-free
-  REVIEW_MODEL_2: opencode/deepseek-v4-flash-free
-  REVIEW_MODEL_3: opencode/mimo-v2.5-free
+  BUILD_MODEL_1: opencode/fledge-alpha-free
+  BUILD_MODEL_2: opencode/mimo-v2.6-flash-free
+  BUILD_MODEL_3: opencode/ling-3.1-flash-free
+  BUILD_MODEL_4: opencode/longcat-2.5-preview-free
+  BUILD_MODEL_5: opencode/exo-free
+  BUILD_MODEL_6: opencode/mimo-v2.5-free
+  REVIEW_MODEL_1: opencode/fledge-alpha-free
+  REVIEW_MODEL_2: opencode/ling-3.1-flash-free
+  REVIEW_MODEL_3: opencode/mimo-v2.6-flash-free
+  REVIEW_MODEL_4: opencode/longcat-2.5-preview-free
+  REVIEW_MODEL_5: opencode/mimo-v2.5-free
+  REVIEW_MODEL_6: opencode/space-bunny-free
 
 jobs:
   factory:
@@ -250,6 +256,359 @@ jobs:
             exit 70
           fi
           "$OPENCODE" --version
+
+          # Refresh the live OpenCode Zen catalog every cycle. Free preview aliases
+          # change over time, so stale hard-coded IDs must never brick the factory.
+          MODEL_CATALOG=$("$OPENCODE" models opencode --refresh 2>/dev/null || "$OPENCODE" models opencode 2>/dev/null || true)
+          if [[ -n "$MODEL_CATALOG" ]]; then
+            echo "MODEL_CATALOG_REFRESHED"
+            printf '%s\n' "$MODEL_CATALOG" | grep -E '^opencode/.*free
+            local WT="$1"
+            git -C "$WT" restore --source="$BASE_SHA" --staged --worktree -- \
+              .github .opencode/agents AGENTS.md \
+              docs/MASTER_PROMPT.md docs/MASTER_PROMPT_ORIGINAL_FR.md \
+              docs/PRODUCT_OBJECTIVE.md docs/agents docs/workcards state/factory.json \
+              2>/dev/null || true
+            git -C "$WT" clean -fd -- .github .opencode/agents docs/agents docs/workcards >/dev/null 2>&1 || true
+          }
+
+          run_role() {
+            local WT="$1"
+            local ROLE="$2"
+            local LANE="$3"
+            local MISSION="$4"
+            local PROFILE="${5:-build}"
+            local EXTRA="${6:-}"
+            local ROLE_HOME="$RUNNER_TEMP/opencode-${GITHUB_RUN_ID}-${LANE}-${ROLE}"
+            local -a MODELS
+
+            if [[ "$PROFILE" == "review" ]]; then
+              MODELS=("$REVIEW_MODEL_1" "$REVIEW_MODEL_2" "$REVIEW_MODEL_3" "$REVIEW_MODEL_4" "$REVIEW_MODEL_5" "$REVIEW_MODEL_6")
+            else
+              MODELS=("$BUILD_MODEL_1" "$BUILD_MODEL_2" "$BUILD_MODEL_3" "$BUILD_MODEL_4" "$BUILD_MODEL_5" "$BUILD_MODEL_6")
+            fi
+
+            mkdir -p "$ROLE_HOME/data" "$ROLE_HOME/cache" "$ROLE_HOME/state"
+
+            local INDEX=0
+            for MODEL in "${MODELS[@]}"; do
+              INDEX=$((INDEX + 1))
+              if ! model_available "$MODEL"; then
+                echo "::warning::MODEL_SKIPPED_UNAVAILABLE lane=$LANE role=$ROLE profile=$PROFILE model=$MODEL order=$INDEX/${#MODELS[@]}"
+                continue
+              fi
+              echo "MODEL_ATTEMPT lane=$LANE role=$ROLE profile=$PROFILE model=$MODEL order=$INDEX/${#MODELS[@]}"
+              set +e
+              (
+                cd "$WT"
+                HOME="$ROLE_HOME" \
+                XDG_DATA_HOME="$ROLE_HOME/data" \
+                XDG_CACHE_HOME="$ROLE_HOME/cache" \
+                XDG_STATE_HOME="$ROLE_HOME/state" \
+                GIT_CONFIG_COUNT=1 \
+                GIT_CONFIG_KEY_0=remote.origin.pushurl \
+                GIT_CONFIG_VALUE_0=https://127.0.0.1/beetlejuice-agent-push-disabled \
+                timeout 7m "$OPENCODE" run --model "$MODEL" --agent "$ROLE" "$(cat <<EOF
+          Read AGENTS.md, docs/MASTER_PROMPT.md, docs/MASTER_PROMPT_ORIGINAL_FR.md, docs/PRODUCT_OBJECTIVE.md,
+          docs/agents/AGENT_CARDS.md, active workcards, state/factory.json, reports, tests and implementation before acting.
+          The MASTER_PROMPT is binding.
+
+          You are role $ROLE in the workflow-created ephemeral lane '$LANE'. Every builder lane started from exact durable
+          main SHA $BASE_SHA. Your lane branch is disposable workspace and never product truth.
+
+          Mission: $MISSION
+          $EXTRA
+
+          Obey your canonical role card. Do not manage Git topology: do not create/switch branches, commit, merge or push.
+          Do not edit .github/**, .opencode/agents/**, AGENTS.md, MASTER_PROMPT files, PRODUCT_OBJECTIVE, AGENT_CARDS,
+          workcards or state/factory.json unless your canonical role explicitly owns state (only product_director does).
+          Do not ask questions. If the first approach yields no useful delta, change strategy within this invocation.
+          EOF
+          )"
+              )
+              RC=$?
+              set -e
+              if [[ "$RC" -eq 0 ]]; then
+                echo "MODEL_SUCCEEDED lane=$LANE role=$ROLE profile=$PROFILE model=$MODEL"
+                return 0
+              fi
+              echo "::warning::MODEL_FAILED lane=$LANE role=$ROLE profile=$PROFILE model=$MODEL rc=$RC; trying next configured model"
+            done
+
+            echo "::error::MODEL_CHAIN_EXHAUSTED lane=$LANE role=$ROLE profile=$PROFILE"
+            return 75
+          }
+
+          npm_validate() {
+            local WT="$1"
+            (cd "$WT" && timeout 5m npm install --ignore-scripts --no-audit --no-fund --silent && timeout 10m npm test)
+          }
+
+          full_validate() {
+            local WT="$1"
+            (cd "$WT" && timeout 5m npm install --ignore-scripts --no-audit --no-fund --silent && timeout 12m npm test && timeout 5m npm run demo)
+          }
+
+          declare -A ROLE MISSION WT PID AGENT_RC VALID
+          ROLE[core]=core_builder
+          ROLE[github]=github_builder
+          ROLE[privacy]=privacy_builder
+          ROLE[product]=product_builder
+
+          MISSION[core]="Advance the highest-value unfinished core/domain-model work. For P0.5 prioritize canonical automation-architecture topology/policy, provenance/confidence, structural-waste precision, determinism, falsifiable architecture-learning variables and the later-billing attachment seam."
+          MISSION[github]="Advance WC-007 real-GitHub evidence: high-identifiability corpus, defensible agent/model/task/outcome provenance, real HTTPS ingestion, architecture reconstruction, pagination/rate-limit/network robustness and safe abstention."
+          MISSION[privacy]="Advance executable privacy boundaries: unlinkable-by-default architecture-learning export, rare-combination/re-identification defense, tenant isolation and privacy-safe later economic labels."
+          MISSION[product]="Advance the smallest useful user-facing architecture/outcome/waste/evidence surface. Preserve synthetic demo usability and never fabricate monetary evidence."
+
+          echo "===== CREATE FOUR EPHEMERAL LANES FROM ONE BASE ====="
+          for LANE in core github privacy product; do
+            BRANCH="factory/${GITHUB_RUN_ID}/${LANE}"
+            WT[$LANE]="$WORKROOT/$LANE"
+            git branch -D "$BRANCH" >/dev/null 2>&1 || true
+            git worktree add -B "$BRANCH" "${WT[$LANE]}" "$BASE_SHA"
+            git -C "${WT[$LANE]}" config user.name "beetlejuice-${LANE}-lane"
+            git -C "${WT[$LANE]}" config user.email "beetlejuice-autonomous@users.noreply.github.com"
+          done
+
+          echo "===== START FOUR BUILD ROLES IN PARALLEL ====="
+          for LANE in core github privacy product; do
+            run_role "${WT[$LANE]}" "${ROLE[$LANE]}" "$LANE" "${MISSION[$LANE]}" build \
+              >"$RUNNER_TEMP/beetlejuice-${GITHUB_RUN_ID}-${LANE}.log" 2>&1 &
+            PID[$LANE]=$!
+          done
+
+          set +e
+          for LANE in core github privacy product; do
+            wait "${PID[$LANE]}"
+            AGENT_RC[$LANE]=$?
+          done
+          set -e
+
+          for LANE in core github privacy product; do
+            echo "===== LANE LOG: $LANE ====="
+            cat "$RUNNER_TEMP/beetlejuice-${GITHUB_RUN_ID}-${LANE}.log" || true
+          done
+
+          VALID_COUNT=0
+          echo "===== VALIDATE EACH LANE IN ISOLATION ====="
+          for LANE in core github privacy product; do
+            WT_PATH="${WT[$LANE]}"
+            BRANCH="factory/${GITHUB_RUN_ID}/${LANE}"
+            VALID[$LANE]=false
+
+            if [[ "${AGENT_RC[$LANE]}" -ne 0 ]]; then
+              echo "::error::LANE_FAILED lane=$LANE model_chain_rc=${AGENT_RC[$LANE]}"
+              continue
+            fi
+            if [[ "$(git -C "$WT_PATH" branch --show-current)" != "$BRANCH" ]]; then
+              echo "::error::LANE_UNSAFE_BRANCH_CHANGE lane=$LANE"
+              continue
+            fi
+            if [[ "$(git -C "$WT_PATH" rev-parse HEAD)" != "$BASE_SHA" ]]; then
+              git -C "$WT_PATH" reset --mixed "$BASE_SHA"
+            fi
+            protect_lane "$WT_PATH"
+
+            if [[ -z "$(git -C "$WT_PATH" status --porcelain)" ]]; then
+              echo "::warning::LANE_ZERO_DELTA lane=$LANE"
+              continue
+            fi
+
+            if ! npm_validate "$WT_PATH"; then
+              echo "::warning::LANE_TEST_RED lane=$LANE; one specialist repair pass"
+              if ! run_role "$WT_PATH" "${ROLE[$LANE]}" "$LANE-repair" "${MISSION[$LANE]}" build \
+                "The current lane delta fails the root tests. Repair your own delta without discarding useful work and run relevant tests before returning."; then
+                echo "::error::LANE_REPAIR_FAILED lane=$LANE"
+                continue
+              fi
+              if [[ "$(git -C "$WT_PATH" branch --show-current)" != "$BRANCH" ]]; then
+                echo "::error::LANE_REPAIR_UNSAFE_BRANCH_CHANGE lane=$LANE"
+                continue
+              fi
+              if [[ "$(git -C "$WT_PATH" rev-parse HEAD)" != "$BASE_SHA" ]]; then
+                git -C "$WT_PATH" reset --mixed "$BASE_SHA"
+              fi
+              protect_lane "$WT_PATH"
+              npm_validate "$WT_PATH" || {
+                echo "::error::LANE_REMAINS_RED lane=$LANE"
+                continue
+              }
+            fi
+
+            git -C "$WT_PATH" add -A
+            if git -C "$WT_PATH" diff --cached --quiet; then
+              echo "::warning::LANE_NO_COMMITTABLE_DELTA lane=$LANE"
+              continue
+            fi
+            git -C "$WT_PATH" commit -m "factory(${LANE}): validated lane ${GITHUB_RUN_ID}"
+            VALID[$LANE]=true
+            VALID_COUNT=$((VALID_COUNT + 1))
+            echo "LANE_VALIDATED lane=$LANE head=$(git -C "$WT_PATH" rev-parse HEAD)"
+          done
+
+          if (( VALID_COUNT == 0 )); then
+            echo "::error::No validated lane output; successor is already queued and will retry from durable main"
+            exit 75
+          fi
+
+          echo "===== INTEGRATION CANDIDATE ====="
+          IBRANCH="factory/${GITHUB_RUN_ID}/integration"
+          IWT="$WORKROOT/integration"
+          git branch -D "$IBRANCH" >/dev/null 2>&1 || true
+          git worktree add -B "$IBRANCH" "$IWT" "$BASE_SHA"
+          git -C "$IWT" config user.name "beetlejuice-integration"
+          git -C "$IWT" config user.email "beetlejuice-autonomous@users.noreply.github.com"
+
+          protect_integration() {
+            git -C "$IWT" restore --source="$BASE_SHA" --staged --worktree -- \
+              .github .opencode/agents AGENTS.md \
+              docs/MASTER_PROMPT.md docs/MASTER_PROMPT_ORIGINAL_FR.md \
+              docs/PRODUCT_OBJECTIVE.md docs/agents docs/workcards state/factory.json \
+              2>/dev/null || true
+            git -C "$IWT" clean -fd -- .github .opencode/agents docs/agents docs/workcards >/dev/null 2>&1 || true
+          }
+
+          MERGED=0
+          for LANE in core github privacy product; do
+            [[ "${VALID[$LANE]}" == "true" ]] || continue
+            BRANCH="factory/${GITHUB_RUN_ID}/${LANE}"
+            PRE_MERGE=$(git -C "$IWT" rev-parse HEAD)
+            set +e
+            git -C "$IWT" merge --no-ff --no-edit "$BRANCH"
+            MERGE_RC=$?
+            set -e
+            if [[ "$MERGE_RC" -ne 0 ]]; then
+              echo "::warning::MERGE_CONFLICT lane=$LANE; integration_director resolving"
+              if ! run_role "$IWT" integration_director integration \
+                "Resolve the current Git merge conflict for lane '$LANE'. Preserve compatible intent from prior merged lanes and this lane. Remove conflict markers and leave a coherent integration candidate." build; then
+                git -C "$IWT" merge --abort >/dev/null 2>&1 || git -C "$IWT" reset --hard "$PRE_MERGE"
+                echo "::warning::MERGE_SKIPPED lane=$LANE"
+                continue
+              fi
+              protect_integration
+              if [[ -n "$(git -C "$IWT" diff --name-only --diff-filter=U)" ]]; then
+                git -C "$IWT" merge --abort >/dev/null 2>&1 || git -C "$IWT" reset --hard "$PRE_MERGE"
+                echo "::warning::MERGE_UNRESOLVED lane=$LANE"
+                continue
+              fi
+              git -C "$IWT" add -A
+              if git -C "$IWT" rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
+                GIT_EDITOR=true git -C "$IWT" commit --no-edit
+              fi
+            fi
+            MERGED=$((MERGED + 1))
+          done
+
+          if (( MERGED == 0 )); then
+            echo "::error::No lane survived integration"
+            exit 75
+          fi
+
+          protect_integration
+          if ! full_validate "$IWT"; then
+            echo "::warning::INTEGRATION_RED; integration_director repair"
+            run_role "$IWT" integration_director integration-repair \
+              "The assembled candidate fails the complete npm test + demo path. Diagnose and repair the actual cross-component failures while preserving useful lane work. Run the complete validation before returning." build || exit 75
+            protect_integration
+            full_validate "$IWT" || {
+              echo "::error::INTEGRATION_REMAINS_RED"
+              exit 75
+            }
+            if [[ -n "$(git -C "$IWT" status --porcelain)" ]]; then
+              git -C "$IWT" add -A
+              git -C "$IWT" commit -m "factory: integration repairs ${GITHUB_RUN_ID}"
+            fi
+          fi
+          echo "INTEGRATION_CANDIDATE_GREEN head=$(git -C "$IWT" rev-parse HEAD)"
+
+          echo "===== ADVERSARIAL AUDIT ====="
+          AUDIT_HEAD=$(git -C "$IWT" rev-parse HEAD)
+          run_role "$IWT" product_auditor audit \
+            "Adversarially audit the assembled candidate against the MASTER_PROMPT and active workcards, especially WC-007. Try to falsify corpus identifiability, architecture reconstruction, model/task/outcome provenance, every certain-waste claim, billing honesty, privacy, determinism, network/pagination and real HTTPS evidence. Write audit evidence under reports/** only." review || {
+              echo "::error::AUDITOR_UNAVAILABLE; refusing unaudited advance"
+              exit 75
+            }
+
+          if [[ "$(git -C "$IWT" rev-parse HEAD)" != "$AUDIT_HEAD" ]]; then
+            git -C "$IWT" reset --mixed "$AUDIT_HEAD"
+          fi
+          while IFS= read -r -d '' FILE; do
+            case "$FILE" in
+              reports/*) ;;
+              *) git -C "$IWT" restore --staged --worktree -- "$FILE" 2>/dev/null || true ;;
+            esac
+          done < <(git -C "$IWT" diff --name-only -z)
+          while IFS= read -r -d '' FILE; do
+            case "$FILE" in
+              reports/*) ;;
+              *) rm -rf -- "$IWT/$FILE" ;;
+            esac
+          done < <(git -C "$IWT" ls-files --others --exclude-standard -z)
+          git -C "$IWT" add reports 2>/dev/null || true
+          if ! git -C "$IWT" diff --cached --quiet; then
+            git -C "$IWT" commit -m "factory: adversarial audit ${GITHUB_RUN_ID}"
+          fi
+          echo "AUDIT_COMPLETE head=$(git -C "$IWT" rev-parse HEAD)"
+
+          echo "===== PRODUCT DIRECTOR ====="
+          DIRECTOR_HEAD=$(git -C "$IWT" rev-parse HEAD)
+          run_role "$IWT" product_director director \
+            "Act as final Product Director. Evaluate only executed evidence in the integrated candidate and adversarial audit. Update state/factory.json only. P0.5/WC-007 remains before P1 until defensible. Keep continue=true and terminal_ready=false while repo-local work remains; COMPLETE is allowed only when every declared gate and MASTER_PROMPT terminal requirement is truly satisfied." review || {
+              echo "::error::PRODUCT_DIRECTOR_UNAVAILABLE; refusing undirected advance"
+              exit 75
+            }
+
+          if [[ "$(git -C "$IWT" rev-parse HEAD)" != "$DIRECTOR_HEAD" ]]; then
+            git -C "$IWT" reset --mixed "$DIRECTOR_HEAD"
+          fi
+          while IFS= read -r -d '' FILE; do
+            case "$FILE" in
+              state/factory.json) ;;
+              *) git -C "$IWT" restore --staged --worktree -- "$FILE" 2>/dev/null || true ;;
+            esac
+          done < <(git -C "$IWT" diff --name-only -z)
+          while IFS= read -r -d '' FILE; do
+            rm -rf -- "$IWT/$FILE"
+          done < <(git -C "$IWT" ls-files --others --exclude-standard -z)
+
+          FALSE_GATES_AFTER=$(jq '[to_entries[] | select(.key | endswith("_checks")) | select(.value | type == "object") | .value | to_entries[] | select(.value == false)] | length' "$IWT/state/factory.json")
+          STATUS_AFTER=$(jq -r '.status // "BUILDING"' "$IWT/state/factory.json")
+          CONTINUE_AFTER=$(jq -r '.continue // true' "$IWT/state/factory.json")
+          TERMINAL_AFTER=$(jq -r '.terminal_ready // false' "$IWT/state/factory.json")
+          if [[ "$FALSE_GATES_AFTER" -gt 0 && ( "$STATUS_AFTER" == "COMPLETE" || "$CONTINUE_AFTER" != "true" || "$TERMINAL_AFTER" == "true" ) ]]; then
+            TMP=$(mktemp)
+            jq '.status="BUILDING" | .continue=true | .terminal_ready=false | .blocking_reason=null' "$IWT/state/factory.json" > "$TMP"
+            mv "$TMP" "$IWT/state/factory.json"
+            echo "::warning::PREMATURE_TERMINAL_STATE_REJECTED false_gates=$FALSE_GATES_AFTER"
+          fi
+
+          git -C "$IWT" add state/factory.json
+          if ! git -C "$IWT" diff --cached --quiet; then
+            git -C "$IWT" commit -m "factory: durable product truth ${GITHUB_RUN_ID}"
+          fi
+
+          full_validate "$IWT"
+          echo "DIRECTOR_COMPLETE head=$(git -C "$IWT" rev-parse HEAD)"
+
+          echo "===== ADVANCE DURABLE MAIN ONCE ====="
+          timeout 90s git fetch origin main
+          CURRENT_MAIN=$(git rev-parse origin/main)
+          if [[ "$CURRENT_MAIN" != "$BASE_SHA" ]]; then
+            echo "::error::STALE_CYCLE base=$BASE_SHA current_main=$CURRENT_MAIN; refusing overwrite"
+            exit 78
+          fi
+          timeout 90s git -C "$IWT" push origin HEAD:main
+          echo "MAIN_ADVANCED from=$BASE_SHA to=$(git -C "$IWT" rev-parse HEAD)"
+ || true
+          else
+            echo "::warning::MODEL_CATALOG_UNAVAILABLE; configured free chain will still be probed"
+          fi
+
+          model_available() {
+            local MODEL="$1"
+            [[ -z "$MODEL_CATALOG" ]] && return 0
+            grep -Fxq "$MODEL" <<<"$MODEL_CATALOG"
+          }
 
           protect_lane() {
             local WT="$1"
