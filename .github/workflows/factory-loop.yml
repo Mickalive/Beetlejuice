@@ -74,8 +74,16 @@ jobs:
           }
 
           find_successor() {
+            local CUTOFF
+            CUTOFF=$(date -u -d '20 minutes ago' +%Y-%m-%dT%H:%M:%SZ)
             api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs?per_page=100" \
-              --jq ".workflow_runs[] | select(.id != ${GITHUB_RUN_ID}) | select(.path == \".github/workflows/${WORKFLOW}\") | select(.status != \"completed\") | .id" \
+              --jq ".workflow_runs[]
+                | select(.id != ${GITHUB_RUN_ID})
+                | select(.path == \".github/workflows/${WORKFLOW}\")
+                | select(.head_sha == \"${BASE_SHA}\")
+                | select(.created_at >= \"${CUTOFF}\")
+                | select(.status == \"queued\" or .status == \"in_progress\" or .status == \"pending\" or .status == \"waiting\" or .status == \"requested\")
+                | .id" \
               2>/dev/null | head -n1 || true
           }
 
